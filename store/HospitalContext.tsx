@@ -4,11 +4,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Doctor, Department, Service, Appointment, Notice, HospitalConfig } from '../types';
 
 const SUPABASE_URL = 'https://pserlfetpyqoknfzhppc.supabase.co';
-/**
- * IMPORTANT: The key below starts with 'sb_publishable_', which is a Vercel key. 
- * Supabase 'anon' keys usually start with 'eyJ...'. 
- * If data doesn't save, replace this with your Supabase Project API Key.
- */
+// Note: This key format (sb_publishable_...) is common for Vercel-Supabase integrations.
+// If syncing fails across devices, ensure "Realtime" is enabled in your Supabase Dashboard for all tables.
 const SUPABASE_KEY = 'sb_publishable_PVKJQTJ6rOMfjiFC-euVTQ_YMtX9tW9'; 
 
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -61,11 +58,11 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const refreshData = async () => {
     try {
       const [rDocs, rDepts, rServs, rApts, rNotes, rCfg] = await Promise.all([
-        supabase.from('doctors').select('*'),
-        supabase.from('departments').select('*'),
-        supabase.from('services').select('*'),
-        supabase.from('appointments').select('*').order('id', { ascending: false }),
-        supabase.from('notices').select('*').order('date', { ascending: false }),
+        supabase.from('doctors').select('*').order('created_at', { ascending: true }),
+        supabase.from('departments').select('*').order('created_at', { ascending: true }),
+        supabase.from('services').select('*').order('created_at', { ascending: true }),
+        supabase.from('appointments').select('*').order('created_at', { ascending: false }),
+        supabase.from('notices').select('*').order('created_at', { ascending: false }),
         supabase.from('hospital_config').select('*').limit(1)
       ]);
 
@@ -87,16 +84,14 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     refreshData();
     
-    // Set up real-time listener for ALL table changes in the 'public' schema
+    // Subscribe to ALL changes in the public schema for real-time multi-browser sync
     const channel = supabase
-      .channel('db-changes')
+      .channel('schema-db-changes')
       .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
-        console.log('Database change received:', payload);
+        console.log('Real-time sync update from table:', payload.table);
         refreshData();
       })
-      .subscribe((status) => {
-        console.log('Realtime subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
@@ -105,79 +100,73 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const addDoctor = async (doc: Omit<Doctor, 'id'>) => {
     const { error } = await supabase.from('doctors').insert([doc]);
-    if (error) {
-      console.error('Error adding doctor:', error);
-      alert('Save failed. Check if SQL tables are created and Supabase Key is correct.');
-    }
+    if (error) console.error('Add Doctor Error:', error);
     await refreshData();
   };
 
   const updateDoctor = async (id: string, doc: Partial<Doctor>) => {
     const { error } = await supabase.from('doctors').update(doc).eq('id', id);
-    if (error) console.error('Error updating doctor:', error);
+    if (error) console.error('Update Doctor Error:', error);
     await refreshData();
   };
 
   const removeDoctor = async (id: string) => {
     const { error } = await supabase.from('doctors').delete().eq('id', id);
-    if (error) console.error('Error removing doctor:', error);
+    if (error) console.error('Remove Doctor Error:', error);
     await refreshData();
   };
 
   const addDepartment = async (dept: Omit<Department, 'id'>) => {
     const { error } = await supabase.from('departments').insert([dept]);
-    if (error) console.error('Error adding department:', error);
+    if (error) console.error('Add Dept Error:', error);
     await refreshData();
   };
 
   const removeDepartment = async (id: string) => {
     const { error } = await supabase.from('departments').delete().eq('id', id);
-    if (error) console.error('Error removing department:', error);
+    if (error) console.error('Remove Dept Error:', error);
     await refreshData();
   };
 
   const addService = async (service: Omit<Service, 'id'>) => {
     const { error } = await supabase.from('services').insert([service]);
-    if (error) console.error('Error adding service:', error);
+    if (error) console.error('Add Service Error:', error);
     await refreshData();
   };
 
   const removeService = async (id: string) => {
     const { error } = await supabase.from('services').delete().eq('id', id);
-    if (error) console.error('Error removing service:', error);
+    if (error) console.error('Remove Service Error:', error);
     await refreshData();
   };
 
   const addNotice = async (notice: Omit<Notice, 'id'>) => {
     const { error } = await supabase.from('notices').insert([notice]);
-    if (error) console.error('Error adding notice:', error);
+    if (error) console.error('Add Notice Error:', error);
     await refreshData();
   };
 
   const removeNotice = async (id: string) => {
     const { error } = await supabase.from('notices').delete().eq('id', id);
-    if (error) console.error('Error removing notice:', error);
+    if (error) console.error('Remove Notice Error:', error);
     await refreshData();
   };
 
   const bookAppointment = async (apt: Omit<Appointment, 'id' | 'status'>) => {
     const { error } = await supabase.from('appointments').insert([{ ...apt, status: 'Pending' }]);
-    if (error) {
-      console.error('Error booking appointment:', error);
-      alert('Booking failed. Please ensure the "appointments" table exists in Supabase.');
-    }
+    if (error) console.error('Booking Error:', error);
     await refreshData();
   };
 
   const updateAppointment = async (id: string, apt: Partial<Appointment>) => {
     const { error } = await supabase.from('appointments').update(apt).eq('id', id);
-    if (error) console.error('Error updating appointment:', error);
+    if (error) console.error('Update Appointment Error:', error);
     await refreshData();
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
     const { error } = await supabase.from('appointments').update({ status }).eq('id', id);
-    if (error) console.error('Error updating status:', error);
+    if (error) console.error('Status Update Error:', error);
     await refreshData();
   };
 
@@ -191,7 +180,7 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const res = await supabase.from('hospital_config').insert([newConfig]);
       error = res.error;
     }
-    if (error) console.error('Error updating config:', error);
+    if (error) console.error('Config Error:', error);
     await refreshData();
   };
 
