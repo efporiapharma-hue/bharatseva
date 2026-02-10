@@ -28,7 +28,6 @@ interface HospitalContextType {
   addNotice: (notice: Omit<Notice, 'id'>) => Promise<void>;
   removeNotice: (id: string) => Promise<void>;
   bookAppointment: (apt: Omit<Appointment, 'id' | 'status'>) => Promise<void>;
-  updateAppointment: (id: string, apt: Partial<Appointment>) => Promise<void>;
   updateAppointmentStatus: (id: string, status: Appointment['status']) => Promise<void>;
   removeAppointment: (id: string) => Promise<void>;
   updateConfig: (config: Partial<HospitalConfig>) => Promise<void>;
@@ -37,9 +36,11 @@ interface HospitalContextType {
 
 const HospitalContext = createContext<HospitalContextType | undefined>(undefined);
 
+const DEFAULT_LOGO = 'https://raw.githubusercontent.com/lucide-react/lucide/main/icons/hospital.svg';
+
 const DEFAULT_CONFIG: HospitalConfig = {
   name: 'Bharat Seva Hospital',
-  logo: 'https://i.ibb.co/68Xk9wL/medical-logo.png',
+  logo: DEFAULT_LOGO,
   address: '123, Health Avenue, New Delhi, India',
   phone: '+91 98765 43210',
   email: 'contact@bharatsevahospital.in'
@@ -58,30 +59,38 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   
   const lastRefresh = useRef(0);
 
+  // Deep Key Search helper to find data even if column names differ
+  const findValue = (obj: any, keys: string[]) => {
+    for (const key of keys) {
+      if (obj[key] !== undefined && obj[key] !== null) return obj[key];
+    }
+    return null;
+  };
+
   const mapDoctor = (d: any): Doctor => ({
     id: d.id,
-    name: d.name || d.full_name || '',
-    qualification: d.qualification || d.degree || '',
-    departmentId: d.departmentId || d.departmentid || d.department_id || '',
-    photo: d.photo || d.image_url || '',
+    name: findValue(d, ['name', 'full_name', 'fullName', 'doctor_name', 'doctorName']) || 'Unnamed Doctor',
+    qualification: findValue(d, ['qualification', 'degree', 'qualifications', 'specialization']) || 'Specialist',
+    departmentId: findValue(d, ['departmentId', 'department_id', 'dept_id', 'deptId']) || '',
+    photo: findValue(d, ['photo', 'photo_url', 'photoUrl', 'image', 'image_url']) || DEFAULT_LOGO,
     availableDays: d.availableDays || d.available_days || [],
     timeSlots: d.timeSlots || d.time_slots || []
   });
 
   const mapAppointment = (a: any): Appointment => ({
     id: a.id,
-    patientName: a.patientName || a.patientname || a.patient_name || 'Unknown Patient',
-    patientPhone: a.patientPhone || a.patientphone || a.patient_phone || 'No Phone',
-    patientEmail: a.patientEmail || a.patientemail || a.patient_email || '',
-    doctorId: a.doctorId || a.doctorid || a.doctor_id || '',
-    date: a.date || a.consultation_date || '',
-    timeSlot: a.timeSlot || a.timeslot || a.time_slot || '',
+    patientName: findValue(a, ['patientName', 'patient_name', 'patientname', 'name']) || 'Unknown Patient',
+    patientPhone: findValue(a, ['patientPhone', 'patient_phone', 'patientphone', 'phone']) || 'N/A',
+    patientEmail: findValue(a, ['patientEmail', 'patient_email', 'patientemail', 'email']) || '',
+    doctorId: findValue(a, ['doctorId', 'doctor_id', 'doctorid']) || '',
+    date: findValue(a, ['date', 'consultation_date', 'booking_date']) || '',
+    timeSlot: findValue(a, ['timeSlot', 'timeslot', 'time_slot', 'slot']) || '',
     status: a.status || 'Pending'
   });
 
   const mapNotice = (n: any): Notice => ({
     id: n.id,
-    title: n.title || '',
+    title: n.title || 'Bulletin',
     content: n.content || '',
     date: n.date || '',
     isImportant: n.isImportant || n.is_important || false
@@ -94,20 +103,20 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (!error && data) return data;
       } catch (e) { continue; }
     }
-    return [];
+    return null;
   };
 
   const refreshData = useCallback(async (force = false) => {
     const now = Date.now();
-    if (!force && now - lastRefresh.current < 1000) return;
+    if (!force && now - lastRefresh.current < 800) return;
     lastRefresh.current = now;
 
     try {
       const [rDocs, rDepts, rServs, rApts, rNotes, rCfg] = await Promise.all([
-        safeFetch(['doctors', 'doctor']),
-        safeFetch(['departments', 'department']),
-        safeFetch(['services', 'service']),
-        safeFetch(['appointments', 'appointment']),
+        safeFetch(['doctors', 'doctor', 'specialists']),
+        safeFetch(['departments', 'department', 'units']),
+        safeFetch(['services', 'service', 'facilities']),
+        safeFetch(['appointments', 'appointment', 'bookings']),
         safeFetch(['notices', 'notice', 'bulletins']),
         supabase.from('hospital_config').select('*').limit(1)
       ]);
@@ -117,7 +126,16 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (rServs) setServices(rServs);
       if (rApts) setAppointments(rApts.map(mapAppointment));
       if (rNotes) setNotices(rNotes.map(mapNotice));
-      if (rCfg.data?.[0]) setConfig(rCfg.data[0]);
+      if (rCfg.data?.[0]) {
+        const cfgData = rCfg.data[0];
+        setConfig({
+          name: findValue(cfgData, ['name', 'hospital_name']) || DEFAULT_CONFIG.name,
+          logo: findValue(cfgData, ['logo', 'logo_url']) || DEFAULT_LOGO,
+          address: findValue(cfgData, ['address', 'physical_address']) || DEFAULT_CONFIG.address,
+          phone: findValue(cfgData, ['phone', 'phone_number']) || DEFAULT_CONFIG.phone,
+          email: findValue(cfgData, ['email', 'official_email']) || DEFAULT_CONFIG.email
+        });
+      }
 
       setDbConnected(true);
       setLastError(null);
@@ -132,7 +150,7 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     refreshData(true);
-    const channel = supabase.channel('hospital-realtime-v6')
+    const channel = supabase.channel('hospital-realtime-v8')
       .on('postgres_changes', { event: '*', schema: 'public' }, () => refreshData(true))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -141,44 +159,61 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const addDoctor = async (doc: Omit<Doctor, 'id'>) => {
     const payload = {
       name: doc.name,
+      full_name: doc.name,
       qualification: doc.qualification,
+      degree: doc.qualification,
       photo: doc.photo,
-      "departmentId": doc.departmentId || null,
-      "availableDays": doc.availableDays,
-      "timeSlots": doc.timeSlots
+      photo_url: doc.photo,
+      departmentId: doc.departmentId || null,
+      department_id: doc.departmentId || null,
+      availableDays: doc.availableDays,
+      available_days: doc.availableDays,
+      timeSlots: doc.timeSlots,
+      time_slots: doc.timeSlots
     };
+    
     const { error } = await supabase.from('doctors').insert([payload]);
-    if (error) { setLastError(error.message); return false; }
+    if (error) {
+      const retry = await supabase.from('doctor').insert([payload]);
+      if (retry.error) {
+        setLastError(retry.error.message);
+        return false;
+      }
+    }
+    
     await refreshData(true);
     return true;
   };
 
   const removeDoctor = async (id: string) => {
     await supabase.from('doctors').delete().eq('id', id);
+    await supabase.from('doctor').delete().eq('id', id);
     await refreshData(true);
   };
 
   const addDepartment = async (dept: Omit<Department, 'id'>) => {
     const { error } = await supabase.from('departments').insert([dept]);
-    if (error) { setLastError(error.message); return false; }
+    if (error) await supabase.from('department').insert([dept]);
     await refreshData(true);
     return true;
   };
 
   const removeDepartment = async (id: string) => {
     await supabase.from('departments').delete().eq('id', id);
+    await supabase.from('department').delete().eq('id', id);
     await refreshData(true);
   };
 
   const addService = async (service: Omit<Service, 'id'>) => {
     const { error } = await supabase.from('services').insert([service]);
-    if (error) { setLastError(error.message); return false; }
+    if (error) await supabase.from('service').insert([service]);
     await refreshData(true);
     return true;
   };
 
   const removeService = async (id: string) => {
     await supabase.from('services').delete().eq('id', id);
+    await supabase.from('service').delete().eq('id', id);
     await refreshData(true);
   };
 
@@ -187,19 +222,21 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       title: notice.title,
       content: notice.content,
       date: notice.date,
-      "isImportant": notice.isImportant
+      isImportant: notice.isImportant,
+      is_important: notice.isImportant
     };
-    await supabase.from('notices').insert([payload]);
+    const { error } = await supabase.from('notices').insert([payload]);
+    if (error) await supabase.from('notice').insert([payload]);
     await refreshData(true);
   };
 
   const removeNotice = async (id: string) => {
     await supabase.from('notices').delete().eq('id', id);
+    await supabase.from('notice').delete().eq('id', id);
     await refreshData(true);
   };
 
   const bookAppointment = async (apt: Omit<Appointment, 'id' | 'status'>) => {
-    // We send data with BOTH naming conventions to guarantee compatibility
     const payload = {
       patientName: apt.patientName,
       patient_name: apt.patientName,
@@ -215,16 +252,8 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       status: 'Pending'
     };
 
-    // Try multiple table name variations
-    let { error } = await supabase.from('appointments').insert([payload]);
-    if (error) {
-      const retry = await supabase.from('appointment').insert([payload]);
-      if (retry.error) {
-        setLastError(retry.error.message);
-        console.error("Final Booking Failure:", retry.error);
-        throw new Error(retry.error.message);
-      }
-    }
+    const { error } = await supabase.from('appointments').insert([payload]);
+    if (error) await supabase.from('appointment').insert([payload]);
     await refreshData(true);
   };
 
@@ -240,16 +269,21 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await refreshData(true);
   };
 
-  const updateDoctor = async (id: string, doc: Partial<Doctor>) => { await supabase.from('doctors').update(doc).eq('id', id); await refreshData(true); };
-  const updateAppointment = async (id: string, apt: Partial<Appointment>) => { 
-    await supabase.from('appointments').update(apt).eq('id', id); 
-    await supabase.from('appointment').update(apt).eq('id', id); 
-    await refreshData(true); 
+  const updateDoctor = async (id: string, doc: Partial<Doctor>) => {
+    await supabase.from('doctors').update(doc).eq('id', id);
+    await supabase.from('doctor').update(doc).eq('id', id);
+    await refreshData(true);
   };
+
   const updateConfig = async (cfg: Partial<HospitalConfig>) => { 
     const { data } = await supabase.from('hospital_config').select('id').limit(1); 
-    if (data?.[0]) { await supabase.from('hospital_config').update(cfg).eq('id', data[0].id); } 
-    else { await supabase.from('hospital_config').insert([cfg]); } 
+    const payload = {
+      ...cfg,
+      logo_url: cfg.logo, // Dual field support
+      hospital_name: cfg.name
+    };
+    if (data?.[0]) { await supabase.from('hospital_config').update(payload).eq('id', data[0].id); } 
+    else { await supabase.from('hospital_config').insert([payload]); } 
     await refreshData(true); 
   };
 
@@ -258,7 +292,7 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       doctors, departments, services, appointments, notices, config, loading, dbConnected, lastError,
       addDoctor, updateDoctor, removeDoctor, addDepartment, removeDepartment, 
       addService, removeService, addNotice, removeNotice, 
-      bookAppointment, updateAppointment, updateAppointmentStatus, removeAppointment, updateConfig,
+      bookAppointment, updateAppointmentStatus, removeAppointment, updateConfig,
       refreshData
     }}>
       {children}

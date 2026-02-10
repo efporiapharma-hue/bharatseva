@@ -5,7 +5,7 @@ import {
   Settings, Users, Calendar, Bell, LayoutGrid, Plus, Trash2, Check, X, 
   Image as ImageIcon, Camera, Lock, RefreshCw,
   ShieldPlus, Activity, BriefcaseMedical, UserPlus, History, AlertTriangle, CloudOff, CheckCircle,
-  Info
+  Info, Database, Upload, MessageSquare
 } from 'lucide-react';
 import { Appointment, Doctor, HospitalConfig } from '../types';
 
@@ -25,9 +25,11 @@ const Admin = () => {
   const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Confirmed' | 'Cancelled'>('All');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
   const [localConfig, setLocalConfig] = useState<HospitalConfig>(config);
   const [isAddingDoc, setIsAddingDoc] = useState(false);
   const [isAddingApt, setIsAddingApt] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
 
   useEffect(() => { setLocalConfig(config); }, [config]);
 
@@ -67,7 +69,8 @@ const Admin = () => {
     setIsAddingDoc(false);
     if (success) {
       setNewDoc({ name: '', qualification: '', departmentId: departments[0]?.id || '', photo: '', availableDays: 'Mon, Wed, Fri', timeSlots: '10:00 AM - 1:00 PM, 4:00 PM - 7:00 PM' });
-      alert("Specialist registered!");
+      alert("Specialist registered successfully!");
+      refreshData(true);
     }
   };
 
@@ -78,10 +81,23 @@ const Admin = () => {
       await bookAppointment(newApt);
       setIsAddingApt(false);
       setNewApt({ patientName: '', patientPhone: '', patientEmail: '', doctorId: '', date: '', timeSlot: '' });
-      alert("Consultation booked successfully!");
+      alert("Consultation logged successfully!");
+      refreshData(true);
     } catch (err: any) {
       setIsAddingApt(false);
       alert("Database error: " + err.message);
+    }
+  };
+
+  const handleConfigSave = async () => {
+    setIsSavingConfig(true);
+    try {
+      await updateConfig(localConfig);
+      alert("Institution configuration updated!");
+    } catch (err: any) {
+      alert("Error saving config: " + err.message);
+    } finally {
+      setIsSavingConfig(false);
     }
   };
 
@@ -155,9 +171,43 @@ const Admin = () => {
             <div className="bg-white p-12 rounded-[3.5rem] shadow-xl border border-gray-100 space-y-12 animate-in fade-in zoom-in-95 duration-500">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
                  <div className="lg:col-span-1">
-                    <label className={labelClasses}>Logo URL</label>
-                    <div className="p-6 bg-gray-50 border-2 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center space-y-4">
-                      {localConfig.logo ? <img src={localConfig.logo} className="h-32 object-contain" /> : <ImageIcon className="text-gray-300" size={48} />}
+                    <label className={labelClasses}>Institution Identity (Logo)</label>
+                    <div 
+                      onClick={() => logoFileInputRef.current?.click()}
+                      className="group relative p-8 bg-gray-50 border-4 border-dashed rounded-[3rem] flex flex-col items-center justify-center space-y-4 cursor-pointer hover:bg-emerald-50 hover:border-emerald-200 transition-all border-gray-100 overflow-hidden"
+                    >
+                      {localConfig.logo ? (
+                        <img 
+                          src={localConfig.logo} 
+                          className="h-32 object-contain" 
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://raw.githubusercontent.com/lucide-react/lucide/main/icons/hospital.svg';
+                          }}
+                        />
+                      ) : (
+                        <ImageIcon className="text-gray-300" size={64} />
+                      )}
+                      <div className="absolute inset-0 bg-emerald-600/0 group-hover:bg-emerald-600/5 transition-all flex items-center justify-center">
+                         <Upload className="text-emerald-600 opacity-0 group-hover:opacity-100 transition-all" size={32} />
+                      </div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Click to Upload Logo</p>
+                    </div>
+                    <input 
+                      type="file" 
+                      ref={logoFileInputRef} 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) { 
+                          const r = new FileReader(); 
+                          r.onloadend = () => setLocalConfig({...localConfig, logo: r.result as string}); 
+                          r.readAsDataURL(file); 
+                        }
+                      }} 
+                    />
+                    <div className="mt-6">
+                      <label className={labelClasses}>Logo URL (Optional Override)</label>
                       <input className={inputClasses} value={localConfig.logo} placeholder="https://..." onChange={e => setLocalConfig({...localConfig, logo: e.target.value})} />
                     </div>
                  </div>
@@ -168,19 +218,25 @@ const Admin = () => {
                     <div><label className={labelClasses}>Physical Address</label><input className={inputClasses} value={localConfig.address} onChange={e => setLocalConfig({...localConfig, address: e.target.value})} /></div>
                  </div>
               </div>
-              <button onClick={() => updateConfig(localConfig)} className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg hover:bg-emerald-700 shadow-xl uppercase transition-all active:scale-95">Update Hospital Registry</button>
+              <button 
+                onClick={handleConfigSave} 
+                disabled={isSavingConfig}
+                className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg hover:bg-emerald-700 shadow-xl uppercase transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isSavingConfig ? 'Saving Changes...' : 'Save Registry Details'}
+              </button>
             </div>
           )}
 
-          {/* Doctors Tab - Restored */}
+          {/* Doctors Tab */}
           {activeTab === 'doctors' && (
             <div className="space-y-12 animate-in fade-in duration-500">
                <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-gray-100">
-                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><Plus className="mr-2"/> New Specialist Registry</h3>
+                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><Plus className="mr-2"/> Specialist Registry</h3>
                   <form onSubmit={handleDocAdd} className="grid grid-cols-1 lg:grid-cols-3 gap-12">
                     <div className="lg:col-span-1">
                       <label className={labelClasses}>Portrait Upload</label>
-                      <div onClick={() => fileInputRef.current?.click()} className="w-full aspect-square bg-gray-50 border-4 border-dashed rounded-[3rem] flex flex-col items-center justify-center cursor-pointer overflow-hidden border-gray-100">
+                      <div onClick={() => fileInputRef.current?.click()} className="w-full aspect-square bg-gray-50 border-4 border-dashed rounded-[3rem] flex flex-col items-center justify-center cursor-pointer overflow-hidden border-gray-100 hover:border-emerald-200 transition-all">
                         {newDoc.photo ? <img src={newDoc.photo} className="w-full h-full object-cover" /> : <div className="text-center"><Camera size={48} className="text-gray-200 mx-auto" /><p className="text-[10px] font-black text-gray-300 uppercase mt-2">Click to Upload</p></div>}
                       </div>
                       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => {
@@ -190,58 +246,58 @@ const Admin = () => {
                     </div>
                     <div className="lg:col-span-2 space-y-8">
                       <div className="grid grid-cols-2 gap-8">
-                        <div><label className={labelClasses}>Full Name</label><input className={inputClasses} value={newDoc.name} onChange={e => setNewDoc({...newDoc, name: e.target.value})} required /></div>
-                        <div><label className={labelClasses}>Qualifications</label><input className={inputClasses} value={newDoc.qualification} onChange={e => setNewDoc({...newDoc, qualification: e.target.value})} required /></div>
+                        <div><label className={labelClasses}>Doctor Name</label><input className={inputClasses} value={newDoc.name} onChange={e => setNewDoc({...newDoc, name: e.target.value})} required placeholder="e.g. Dr. Ajay" /></div>
+                        <div><label className={labelClasses}>Qualifications</label><input className={inputClasses} value={newDoc.qualification} onChange={e => setNewDoc({...newDoc, qualification: e.target.value})} required placeholder="MBBS, MD" /></div>
                       </div>
                       <div><label className={labelClasses}>Clinical Department</label><select className={inputClasses} value={newDoc.departmentId} onChange={e => setNewDoc({...newDoc, departmentId: e.target.value})} required><option value="">Select Department...</option>{departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
                       <div className="grid grid-cols-2 gap-8">
                         <div><label className={labelClasses}>Working Days</label><input className={inputClasses} value={newDoc.availableDays} onChange={e => setNewDoc({...newDoc, availableDays: e.target.value})} /></div>
-                        <div><label className={labelClasses}>Hours (Time Slots)</label><input className={inputClasses} value={newDoc.timeSlots} onChange={e => setNewDoc({...newDoc, timeSlots: e.target.value})} /></div>
+                        <div><label className={labelClasses}>Hours</label><input className={inputClasses} value={newDoc.timeSlots} onChange={e => setNewDoc({...newDoc, timeSlots: e.target.value})} /></div>
                       </div>
-                      <button type="submit" disabled={isAddingDoc} className="w-full bg-emerald-600 text-white py-6 rounded-3xl font-black text-xl hover:bg-emerald-700 shadow-xl uppercase">{isAddingDoc ? 'Registering...' : 'Register Specialist'}</button>
+                      <button type="submit" disabled={isAddingDoc} className="w-full bg-emerald-600 text-white py-6 rounded-3xl font-black text-xl hover:bg-emerald-700 shadow-xl uppercase transition-all">{isAddingDoc ? 'Registering...' : 'Complete Registration'}</button>
                     </div>
                   </form>
                </div>
+               
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {doctors.length === 0 ? (
-                    <div className="col-span-full py-10 text-center text-gray-400 font-bold uppercase tracking-widest border-2 border-dashed rounded-[3rem]">No doctors registered</div>
+                    <div className="col-span-full py-20 text-center text-gray-300 font-black uppercase tracking-[0.3em] border-2 border-dashed rounded-[3rem] bg-white">
+                        <CloudOff size={48} className="mx-auto mb-4 opacity-20" />
+                        No doctors visible in Roster
+                    </div>
                   ) : doctors.map(doc => (
-                    <div key={doc.id} className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-gray-100 flex items-center justify-between group">
+                    <div key={doc.id} className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-gray-100 flex items-center justify-between group hover:border-emerald-200 transition-all">
                        <div className="flex items-center space-x-6">
                          <img src={doc.photo} className="w-16 h-16 rounded-2xl object-cover border-4 border-emerald-50" />
                          <div>
                             <h4 className="font-black text-gray-900">{doc.name}</h4>
-                            <p className="text-[10px] text-emerald-600 font-black uppercase">{departments.find(d => d.id === doc.departmentId)?.name || 'General'}</p>
+                            <p className="text-[10px] text-emerald-600 font-black uppercase">{departments.find(d => d.id === doc.departmentId)?.name || 'General Registry'}</p>
                          </div>
                        </div>
-                       <button onClick={() => { if(confirm("Remove this specialist?")) removeDoctor(doc.id) }} className="text-red-300 hover:text-red-600 p-3"><Trash2 size={24} /></button>
+                       <button onClick={() => { if(confirm("Remove this specialist?")) removeDoctor(doc.id) }} className="text-red-300 hover:text-red-600 p-3 transition-all"><Trash2 size={24} /></button>
                     </div>
                   ))}
                </div>
             </div>
           )}
 
-          {/* Appointments Tab */}
+          {/* Appointments Tab - Restored UI */}
           {activeTab === 'appointments' && (
             <div className="space-y-12 animate-in fade-in duration-500">
-               {/* Manual Booking Form */}
-               <div className="bg-white p-12 lg:p-16 rounded-[3.5rem] shadow-2xl border border-gray-100">
-                  <h3 className="text-2xl font-black text-emerald-900 uppercase tracking-tighter mb-12">Consultation Log</h3>
+               <div className="bg-white p-12 rounded-[3.5rem] shadow-xl border border-gray-100">
+                  <h3 className="text-2xl font-black text-emerald-900 uppercase tracking-tighter mb-10">Manual Consultation Entry</h3>
                   <form onSubmit={handleManualBooking} className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div><label className={labelClasses}>Patient Name</label><input className={inputClasses} value={newApt.patientName} onChange={e => setNewApt({...newApt, patientName: e.target.value})} required /></div>
                     <div><label className={labelClasses}>Contact Number</label><input className={inputClasses} value={newApt.patientPhone} onChange={e => setNewApt({...newApt, patientPhone: e.target.value})} required /></div>
                     <div><label className={labelClasses}>Assigned Doctor</label><select className={inputClasses} value={newApt.doctorId} onChange={e => setNewApt({...newApt, doctorId: e.target.value})} required><option value="">Select Doctor...</option>{doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div><label className={labelClasses}>Date</label><input className={inputClasses} type="date" value={newApt.date} onChange={e => setNewApt({...newApt, date: e.target.value})} required /></div>
-                      <div><label className={labelClasses}>Slot</label><input className={inputClasses} value={newApt.timeSlot} onChange={e => setNewApt({...newApt, timeSlot: e.target.value})} required /></div>
+                      <div><label className={labelClasses}>Consultation Date</label><input className={inputClasses} type="date" value={newApt.date} onChange={e => setNewApt({...newApt, date: e.target.value})} required /></div>
+                      <div><label className={labelClasses}>Time Slot</label><input className={inputClasses} placeholder="10:00 AM" value={newApt.timeSlot} onChange={e => setNewApt({...newApt, timeSlot: e.target.value})} required /></div>
                     </div>
-                    <div className="md:col-span-2">
-                      <button type="submit" disabled={isAddingApt} className="w-full bg-emerald-600 text-white py-8 rounded-[2rem] font-black text-2xl shadow-xl hover:bg-emerald-700 uppercase tracking-widest">{isAddingApt ? 'Booking...' : 'Book Consultation'}</button>
-                    </div>
+                    <div className="md:col-span-2"><button type="submit" disabled={isAddingApt} className="w-full bg-emerald-600 text-white py-6 rounded-3xl font-black text-xl hover:bg-emerald-700 shadow-xl uppercase">{isAddingApt ? 'Logging...' : 'Log Consultation'}</button></div>
                   </form>
                </div>
 
-               {/* Queue Management */}
                <div className="bg-white rounded-[3.5rem] shadow-2xl border border-gray-100 overflow-hidden">
                  <div className="p-10 border-b border-gray-100 bg-emerald-50/20 flex flex-col md:flex-row justify-between items-center gap-6">
                    <h3 className="text-2xl font-black text-emerald-900 uppercase">Consultation Registry</h3>
@@ -256,11 +312,11 @@ const Admin = () => {
                  <div className="overflow-x-auto">
                    <table className="w-full text-left">
                       <thead className="bg-gray-50 border-b border-gray-100 text-[10px] font-black uppercase text-gray-400 tracking-[0.2em]">
-                        <tr><th className="px-10 py-6">Patient</th><th className="px-10 py-6">Doctor / Date</th><th className="px-10 py-6">Status</th><th className="px-10 py-6 text-right">Actions</th></tr>
+                        <tr><th className="px-10 py-6">Patient</th><th className="px-10 py-6">Doctor / Schedule</th><th className="px-10 py-6">Status</th><th className="px-10 py-6 text-right">Actions</th></tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {filteredAppointments.length === 0 ? (
-                          <tr><td colSpan={4} className="py-24 text-center opacity-30 font-black uppercase tracking-widest">No matching consultations</td></tr>
+                          <tr><td colSpan={4} className="py-24 text-center opacity-30 font-black uppercase tracking-widest">No matching records</td></tr>
                         ) : filteredAppointments.map(apt => (
                           <tr key={apt.id} className="hover:bg-emerald-50/10">
                             <td className="px-10 py-8">
@@ -268,7 +324,7 @@ const Admin = () => {
                                <div className="text-emerald-600 font-bold text-xs">{apt.patientPhone}</div>
                             </td>
                             <td className="px-10 py-8">
-                               <div className="text-gray-800 font-bold">{doctors.find(d => d.id === apt.doctorId)?.name || 'General Influx'}</div>
+                               <div className="text-gray-800 font-bold">{doctors.find(d => d.id === apt.doctorId)?.name || 'General Registry'}</div>
                                <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">{apt.date} • {apt.timeSlot}</div>
                             </td>
                             <td className="px-10 py-8">
@@ -281,9 +337,9 @@ const Admin = () => {
                               </span>
                             </td>
                             <td className="px-10 py-8 text-right space-x-2">
-                               <button onClick={() => updateAppointmentStatus(apt.id, 'Confirmed')} className="p-3 text-emerald-600 hover:bg-emerald-50 rounded-xl"><Check size={20} /></button>
-                               <button onClick={() => updateAppointmentStatus(apt.id, 'Cancelled')} className="p-3 text-orange-600 hover:bg-orange-50 rounded-xl"><X size={20} /></button>
-                               <button onClick={() => { if(confirm("Permanently wipe record?")) removeAppointment(apt.id) }} className="p-3 text-red-400 hover:bg-red-50 rounded-xl"><Trash2 size={20} /></button>
+                               <button onClick={() => updateAppointmentStatus(apt.id, 'Confirmed')} className="p-3 text-emerald-600 hover:bg-emerald-50 rounded-xl" title="Confirm"><Check size={20} /></button>
+                               <button onClick={() => updateAppointmentStatus(apt.id, 'Cancelled')} className="p-3 text-orange-600 hover:bg-orange-50 rounded-xl" title="Cancel"><X size={20} /></button>
+                               <button onClick={() => { if(confirm("Permanently wipe record?")) removeAppointment(apt.id) }} className="p-3 text-red-400 hover:bg-red-50 rounded-xl" title="Delete"><Trash2 size={20} /></button>
                             </td>
                           </tr>
                         ))}
@@ -294,87 +350,87 @@ const Admin = () => {
             </div>
           )}
 
-          {/* Departments Tab - Restored */}
+          {/* Departments Tab - Restored UI */}
           {activeTab === 'depts' && (
             <div className="space-y-12 animate-in fade-in duration-500">
                <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-gray-100">
-                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><LayoutGrid className="mr-2"/> Medical Unit Registry</h3>
-                  <form onSubmit={async (e) => { e.preventDefault(); await addDepartment(newDept); setNewDept({ name: '', description: '', icon: '🏥' }); alert("Department Added!"); }} className="space-y-8">
+                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><LayoutGrid className="mr-2"/> New Medical Unit Registry</h3>
+                  <form onSubmit={async (e) => { e.preventDefault(); await addDepartment(newDept); setNewDept({ name: '', description: '', icon: '🏥' }); alert("Department registered!"); }} className="space-y-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       <div><label className={labelClasses}>Unit Name</label><input className={inputClasses} value={newDept.name} onChange={e => setNewDept({...newDept, name: e.target.value})} required placeholder="e.g. Cardiology" /></div>
-                      <div><label className={labelClasses}>Visual Icon (Emoji)</label><input className={inputClasses} value={newDept.icon} onChange={e => setNewDept({...newDept, icon: e.target.value})} required /></div>
+                      <div><label className={labelClasses}>Icon (Emoji)</label><input className={inputClasses} value={newDept.icon} onChange={e => setNewDept({...newDept, icon: e.target.value})} required /></div>
                     </div>
-                    <div><label className={labelClasses}>Mission Statement</label><textarea className={`${inputClasses} h-32 resize-none`} value={newDept.description} onChange={e => setNewDept({...newDept, description: e.target.value})} required placeholder="Department capabilities..." /></div>
-                    <button type="submit" className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg uppercase shadow-xl transition-all">Confirm Registration</button>
+                    <div><label className={labelClasses}>Clinical Description</label><textarea className={`${inputClasses} h-32 resize-none`} value={newDept.description} onChange={e => setNewDept({...newDept, description: e.target.value})} required placeholder="Scope of the medical unit..." /></div>
+                    <button type="submit" className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg uppercase shadow-xl transition-all">Confirm Unit Registry</button>
                   </form>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {departments.length === 0 ? (
-                    <div className="col-span-full py-10 text-center text-gray-400 font-bold uppercase tracking-widest border-2 border-dashed rounded-[3rem]">No units found</div>
+                    <div className="col-span-full py-10 text-center text-gray-400 font-bold uppercase tracking-widest border-2 border-dashed rounded-[3rem]">No departments found</div>
                   ) : departments.map(dept => (
                     <div key={dept.id} className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-gray-100 flex items-center justify-between group">
                        <div className="flex items-center space-x-6">
                          <div className="text-4xl">{dept.icon}</div>
                          <div><h4 className="font-black text-gray-900 uppercase tracking-tighter">{dept.name}</h4><p className="text-[10px] text-gray-400 font-bold uppercase line-clamp-1">{dept.description}</p></div>
                        </div>
-                       <button onClick={() => { if(confirm("Delete department?")) removeDepartment(dept.id) }} className="text-red-200 hover:text-red-600 transition-all"><Trash2 size={20} /></button>
+                       <button onClick={() => { if(confirm("Delete this department?")) removeDepartment(dept.id) }} className="text-red-200 hover:text-red-600 transition-all"><Trash2 size={20} /></button>
                     </div>
                   ))}
                </div>
             </div>
           )}
 
-          {/* Services Tab - Restored */}
+          {/* Services Tab - Restored UI */}
           {activeTab === 'services' && (
             <div className="space-y-12 animate-in fade-in duration-500">
                <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-gray-100">
-                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><ShieldPlus className="mr-2"/> Facility Catalog</h3>
-                  <form onSubmit={async (e) => { e.preventDefault(); await addService(newService); setNewService({ title: '', description: '' }); alert("Service Added!"); }} className="space-y-8">
-                    <div><label className={labelClasses}>Facility Title</label><input className={inputClasses} value={newService.title} onChange={e => setNewService({...newService, title: e.target.value})} required placeholder="e.g. 24/7 NICU Support" /></div>
-                    <div><label className={labelClasses}>Technical Details</label><textarea className={`${inputClasses} h-32 resize-none`} value={newService.description} onChange={e => setNewService({...newService, description: e.target.value})} required placeholder="List equipment, hours, etc..." /></div>
-                    <button type="submit" className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg uppercase shadow-xl transition-all">Publish To Catalog</button>
+                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><ShieldPlus className="mr-2"/> Facility & Service Registry</h3>
+                  <form onSubmit={async (e) => { e.preventDefault(); await addService(newService); setNewService({ title: '', description: '' }); alert("Facility registered!"); }} className="space-y-8">
+                    <div><label className={labelClasses}>Facility Title</label><input className={inputClasses} value={newService.title} onChange={e => setNewService({...newService, title: e.target.value})} required placeholder="e.g. 24/7 Diagnostic Lab" /></div>
+                    <div><label className={labelClasses}>Facility Details</label><textarea className={`${inputClasses} h-32 resize-none`} value={newService.description} onChange={e => setNewService({...newService, description: e.target.value})} required placeholder="Equipment, hours, specific capabilities..." /></div>
+                    <button type="submit" className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg uppercase shadow-xl transition-all">Register Facility</button>
                   </form>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {services.length === 0 ? (
-                    <div className="col-span-full py-10 text-center text-gray-400 font-bold uppercase tracking-widest border-2 border-dashed rounded-[3rem]">No facilities registered</div>
+                    <div className="col-span-full py-10 text-center text-gray-400 font-bold uppercase tracking-widest border-2 border-dashed rounded-[3rem]">No services registered</div>
                   ) : services.map(service => (
                     <div key={service.id} className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-gray-100 flex items-center justify-between group">
                        <div className="flex items-center space-x-6">
                          <div className="bg-emerald-50 p-4 rounded-2xl text-emerald-600"><BriefcaseMedical size={24} /></div>
                          <div><h4 className="font-black text-gray-900 leading-tight">{service.title}</h4><p className="text-[10px] text-gray-400 font-bold uppercase line-clamp-1">{service.description}</p></div>
                        </div>
-                       <button onClick={() => { if(confirm("Remove service?")) removeService(service.id) }} className="text-red-200 hover:text-red-600 transition-all"><Trash2 size={20} /></button>
+                       <button onClick={() => { if(confirm("Remove this service?")) removeService(service.id) }} className="text-red-200 hover:text-red-600 transition-all"><Trash2 size={20} /></button>
                     </div>
                   ))}
                </div>
             </div>
           )}
 
-          {/* Notices Tab - Restored */}
+          {/* Notices Tab - Restored UI */}
           {activeTab === 'notices' && (
             <div className="space-y-12 animate-in fade-in duration-500">
                <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-gray-100">
-                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><Bell className="mr-2"/> Medical Bulletin Center</h3>
-                  <form onSubmit={async (e) => { e.preventDefault(); await addNotice(newNotice); setNewNotice({ title: '', content: '', date: new Date().toLocaleDateString(), isImportant: false }); alert("Broadcast Published!"); }} className="space-y-8">
+                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><Bell className="mr-2"/> Medical Bulletin Broadcaster</h3>
+                  <form onSubmit={async (e) => { e.preventDefault(); await addNotice(newNotice); setNewNotice({ title: '', content: '', date: new Date().toLocaleDateString(), isImportant: false }); alert("Notice published!"); }} className="space-y-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       <div><label className={labelClasses}>Bulletin Title</label><input className={inputClasses} value={newNotice.title} onChange={e => setNewNotice({...newNotice, title: e.target.value})} required /></div>
                       <div><label className={labelClasses}>Effective Date</label><input className={inputClasses} value={newNotice.date} onChange={e => setNewNotice({...newNotice, date: e.target.value})} required /></div>
                     </div>
-                    <div><label className={labelClasses}>Alert Message</label><textarea className={`${inputClasses} h-32 resize-none`} value={newNotice.content} onChange={e => setNewNotice({...newNotice, content: e.target.value})} required></textarea></div>
+                    <div><label className={labelClasses}>Message Content</label><textarea className={`${inputClasses} h-32 resize-none`} value={newNotice.content} onChange={e => setNewNotice({...newNotice, content: e.target.value})} required></textarea></div>
                     <div className="flex items-center space-x-4 bg-gray-50 p-6 rounded-2xl border-2 border-dashed border-gray-100">
                       <input type="checkbox" id="imp" checked={newNotice.isImportant} onChange={e => setNewNotice({...newNotice, isImportant: e.target.checked})} className="w-6 h-6 accent-emerald-600 cursor-pointer" />
-                      <label htmlFor="imp" className="font-black text-xs uppercase tracking-widest text-emerald-800 cursor-pointer">Mark as Critical Priority (Broadcast High Alert)</label>
+                      <label htmlFor="imp" className="font-black text-xs uppercase tracking-widest text-emerald-800 cursor-pointer">Mark as High Priority (Critical Alert)</label>
                     </div>
-                    <button type="submit" className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg uppercase shadow-xl hover:bg-emerald-700 transition-all">Publish Bulletin</button>
+                    <button type="submit" className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg uppercase shadow-xl hover:bg-emerald-700 transition-all">Broadcast Bulletin</button>
                   </form>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   {notices.length === 0 ? (
-                    <div className="col-span-full py-10 text-center text-gray-300 font-bold uppercase tracking-[0.3em] border-2 border-dashed rounded-[3rem]">No bulletins in history</div>
+                    <div className="col-span-full py-10 text-center text-gray-300 font-bold uppercase tracking-[0.3em] border-2 border-dashed rounded-[3rem]">No bulletins found</div>
                   ) : notices.map(n => (
                     <div key={n.id} className={`p-10 rounded-[3.5rem] shadow-xl border-4 relative group transition-all ${n.isImportant ? 'bg-red-50 border-red-100' : 'bg-white border-emerald-50'}`}>
-                       {n.isImportant && <div className="absolute top-0 right-10 bg-red-600 text-white text-[10px] font-black uppercase px-5 py-2 rounded-b-xl shadow-lg">High Alert</div>}
+                       {n.isImportant && <div className="absolute top-0 right-10 bg-red-600 text-white text-[10px] font-black uppercase px-5 py-2 rounded-b-xl shadow-lg">Important Alert</div>}
                        <h4 className="font-black text-2xl mb-4 text-gray-900 leading-tight">{n.title}</h4>
                        <p className="text-gray-500 text-sm font-bold leading-relaxed mb-8 line-clamp-4">{n.content}</p>
                        <div className="flex justify-between items-center pt-6 border-t border-gray-100">
@@ -389,26 +445,41 @@ const Admin = () => {
         </div>
       </div>
       
-      {/* Admin Panel Footer Status */}
+      {/* Floating System Health & Diagnostic Dashboard */}
       <div className="fixed bottom-8 right-8 z-50">
-         <div className={`bg-white p-6 rounded-[2.5rem] shadow-2xl border-2 transition-all duration-700 flex flex-col space-y-4 ${dbConnected ? 'border-emerald-50' : 'border-red-100 translate-y-2'}`}>
-            <div className="flex items-center space-x-4">
-               <div className={`p-3 rounded-2xl ${dbConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
-                  {dbConnected ? <CheckCircle size={24} /> : <AlertTriangle size={24} />}
-               </div>
-               <div>
-                  <h5 className="font-black text-gray-900 text-xs uppercase tracking-widest">{dbConnected ? 'System Healthy' : 'Diagnostic Alert'}</h5>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{dbConnected ? 'Database online' : 'Connection failed'}</p>
+         <div className={`bg-white p-8 rounded-[3rem] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] border-2 transition-all duration-700 flex flex-col space-y-6 min-w-[300px] ${dbConnected ? 'border-emerald-50' : 'border-red-100 translate-y-2'}`}>
+            <div className="flex items-center justify-between">
+               <div className="flex items-center space-x-4">
+                  <div className={`p-4 rounded-2xl ${dbConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
+                     {dbConnected ? <CheckCircle size={28} /> : <AlertTriangle size={28} />}
+                  </div>
+                  <div>
+                     <h5 className="font-black text-gray-900 text-sm uppercase tracking-tighter">{dbConnected ? 'Sync Status: Active' : 'Sync Status: Offline'}</h5>
+                     <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Digital Communique Hub</p>
+                  </div>
                </div>
             </div>
-            {lastError && !dbConnected && (
-               <div className="text-[9px] font-black text-red-400 bg-red-50 px-3 py-2 rounded-xl uppercase tracking-tighter max-w-[200px] leading-tight">
-                  Error: {lastError}
+
+            <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100 space-y-3">
+               <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-400">
+                  <span className="flex items-center"><Database size={12} className="mr-1" /> Specialists Table</span>
+                  <span className={doctors.length > 0 ? 'text-emerald-600' : 'text-orange-500'}>{doctors.length} Records</span>
+               </div>
+               <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-400">
+                  <span className="flex items-center"><Calendar size={12} className="mr-1" /> Appointments</span>
+                  <span className="text-emerald-600">{appointments.length} Records</span>
+               </div>
+            </div>
+
+            {lastError && (
+               <div className="text-[9px] font-black text-red-400 bg-red-50 px-4 py-3 rounded-2xl uppercase tracking-tighter leading-tight border border-red-100">
+                  System Diagnostic: {lastError}
                </div>
             )}
-            <button onClick={() => refreshData(true)} className="w-full py-3 bg-gray-50 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded-2xl transition-all flex items-center justify-center space-x-2 border border-gray-100 group">
-               <RefreshCw size={14} className="group-hover:rotate-180 transition-transform duration-500" />
-               <span className="text-[10px] font-black uppercase tracking-widest">Verify Sync</span>
+
+            <button onClick={() => refreshData(true)} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl transition-all flex items-center justify-center space-x-3 shadow-xl active:scale-95 group">
+               <RefreshCw size={18} className={`${dbLoading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-700'}`} />
+               <span className="text-xs font-black uppercase tracking-[0.2em]">Verify Sync</span>
             </button>
          </div>
       </div>
