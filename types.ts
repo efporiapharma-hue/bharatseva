@@ -5,8 +5,8 @@ export interface Doctor {
   qualification: string;
   departmentId: string;
   photo: string;
-  availableDays: string[]; // e.g., ["Mon", "Wed", "Fri"]
-  timeSlots: string[]; // e.g., ["10:00 AM - 12:00 PM", "4:00 PM - 6:00 PM"]
+  availableDays: string[];
+  timeSlots: string[];
 }
 
 export interface Department {
