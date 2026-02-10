@@ -29,6 +29,11 @@ const Home = () => {
     );
   }
 
+  // Safe split handling for hospital name
+  const nameParts = config?.name ? config.name.split(' ') : ['Hospital'];
+  const firstName = nameParts[0];
+  const restOfName = nameParts.slice(1).join(' ');
+
   return (
     <div className="space-y-0">
       {/* Hero Section */}
@@ -49,8 +54,8 @@ const Home = () => {
               Trusted Healthcare Partner
             </div>
             <h1 className="text-6xl md:text-7xl font-extrabold mb-8 leading-tight tracking-tight">
-              {config.name.split(' ')[0]} <br />
-              <span className="text-emerald-600">{config.name.split(' ').slice(1).join(' ')}</span> <br />
+              {firstName} <br />
+              <span className="text-emerald-600">{restOfName}</span> <br />
               <span className="text-[#FF9933]">Compassion</span>
             </h1>
             <p className="text-lg text-gray-600 mb-10 leading-relaxed font-medium max-w-lg">
@@ -99,7 +104,7 @@ const Home = () => {
              </div>
              <h3 className="text-2xl font-bold mb-4">24/7 Response</h3>
              <p className="text-gray-500 mb-6 leading-relaxed">Dedicated trauma center and life-support ambulance services available round the clock.</p>
-             <a href={`tel:${config.phone}`} className="text-blue-700 font-bold flex items-center hover:translate-x-1 transition-transform">Emergency Helpline <ArrowRight size={18} className="ml-2" /></a>
+             <a href={`tel:${config?.phone || ''}`} className="text-blue-700 font-bold flex items-center hover:translate-x-1 transition-transform">Emergency Helpline <ArrowRight size={18} className="ml-2" /></a>
           </div>
         </div>
       </section>

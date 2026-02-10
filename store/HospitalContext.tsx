@@ -5,7 +5,9 @@ import { Doctor, Department, Service, Appointment, Notice, HospitalConfig } from
 
 // Supabase Credentials provided by user
 const SUPABASE_URL = 'https://pserlfetpyqoknfzhppc.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_PVKJQTJ6rOMfjiFC-euVTQ_YMtX9tW9'; // Note: Ensure this is the correct ANON key
+// User provided: sb_publishable_PVKJQTJ6rOMfjiFC-euVTQ_YMtX9tW9
+// Note: This looks like a Vercel key. Supabase keys usually start with 'eyJ...'
+const SUPABASE_KEY = 'sb_publishable_PVKJQTJ6rOMfjiFC-euVTQ_YMtX9tW9'; 
 
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -52,31 +54,41 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const refreshData = async () => {
     try {
-      const [
-        { data: docs },
-        { data: depts },
-        { data: servs },
-        { data: apts },
-        { data: notes },
-        { data: cfg }
-      ] = await Promise.all([
+      const fetchJobs = [
         supabase.from('doctors').select('*'),
         supabase.from('departments').select('*'),
         supabase.from('services').select('*'),
         supabase.from('appointments').select('*').order('date', { ascending: false }),
         supabase.from('notices').select('*').order('date', { ascending: false }),
-        supabase.from('hospital_config').select('*').single()
-      ]);
+        supabase.from('hospital_config').select('*').limit(1) // Avoid .single() to prevent error if 0 rows
+      ];
 
-      if (docs) setDoctors(docs);
-      if (depts) setDepartments(depts);
-      if (servs) setServices(servs);
-      if (apts) setAppointments(apts);
-      if (notes) setNotices(notes);
-      if (cfg) setConfig(cfg);
+      const results = await Promise.all(fetchJobs);
+      
+      const [rDocs, rDepts, rServs, rApts, rNotes, rCfg] = results;
+
+      if (rDocs.data) setDoctors(rDocs.data);
+      if (rDepts.data) setDepartments(rDepts.data);
+      if (rServs.data) setServices(rServs.data);
+      if (rApts.data) setAppointments(rApts.data);
+      if (rNotes.data) setNotices(rNotes.data);
+      
+      // Update config only if data exists to avoid setting it to null/undefined
+      if (rCfg.data && rCfg.data.length > 0) {
+        setConfig(rCfg.data[0]);
+      }
+
+      // Log warnings for debugging if tables are missing or unauthorized
+      results.forEach((res, i) => {
+        if (res.error) {
+          console.warn(`Supabase fetch error for index ${i}:`, res.error.message);
+        }
+      });
+
     } catch (error) {
-      console.error('Error fetching data from Supabase:', error);
+      console.error('Critical Error in HospitalContext refreshData:', error);
     } finally {
+      // ALWAYS set loading to false to prevent a permanent blank screen
       setLoading(false);
     }
   };
@@ -97,73 +109,99 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const addDoctor = async (doc: Omit<Doctor, 'id'>) => {
-    await supabase.from('doctors').insert([doc]);
-    await refreshData();
+    try {
+      await supabase.from('doctors').insert([doc]);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const updateDoctor = async (id: string, doc: Partial<Doctor>) => {
-    await supabase.from('doctors').update(doc).eq('id', id);
-    await refreshData();
+    try {
+      await supabase.from('doctors').update(doc).eq('id', id);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const removeDoctor = async (id: string) => {
-    await supabase.from('doctors').delete().eq('id', id);
-    await refreshData();
+    try {
+      await supabase.from('doctors').delete().eq('id', id);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const addDepartment = async (dept: Omit<Department, 'id'>) => {
-    await supabase.from('departments').insert([dept]);
-    await refreshData();
+    try {
+      await supabase.from('departments').insert([dept]);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const removeDepartment = async (id: string) => {
-    await supabase.from('departments').delete().eq('id', id);
-    await refreshData();
+    try {
+      await supabase.from('departments').delete().eq('id', id);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const addService = async (service: Omit<Service, 'id'>) => {
-    await supabase.from('services').insert([service]);
-    await refreshData();
+    try {
+      await supabase.from('services').insert([service]);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const removeService = async (id: string) => {
-    await supabase.from('services').delete().eq('id', id);
-    await refreshData();
+    try {
+      await supabase.from('services').delete().eq('id', id);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const addNotice = async (notice: Omit<Notice, 'id'>) => {
-    await supabase.from('notices').insert([notice]);
-    await refreshData();
+    try {
+      await supabase.from('notices').insert([notice]);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const removeNotice = async (id: string) => {
-    await supabase.from('notices').delete().eq('id', id);
-    await refreshData();
+    try {
+      await supabase.from('notices').delete().eq('id', id);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const bookAppointment = async (apt: Omit<Appointment, 'id' | 'status'>) => {
-    await supabase.from('appointments').insert([{ ...apt, status: 'Pending' }]);
-    await refreshData();
+    try {
+      await supabase.from('appointments').insert([{ ...apt, status: 'Pending' }]);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const updateAppointment = async (id: string, apt: Partial<Appointment>) => {
-    await supabase.from('appointments').update(apt).eq('id', id);
-    await refreshData();
+    try {
+      await supabase.from('appointments').update(apt).eq('id', id);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
-    await supabase.from('appointments').update({ status }).eq('id', id);
-    await refreshData();
+    try {
+      await supabase.from('appointments').update({ status }).eq('id', id);
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   const updateConfig = async (newConfig: Partial<HospitalConfig>) => {
-    const { data: existing } = await supabase.from('hospital_config').select('id').single();
-    if (existing) {
-      await supabase.from('hospital_config').update(newConfig).eq('id', existing.id);
-    } else {
-      await supabase.from('hospital_config').insert([newConfig]);
-    }
-    await refreshData();
+    try {
+      const { data: existing } = await supabase.from('hospital_config').select('id').limit(1);
+      if (existing && existing.length > 0) {
+        await supabase.from('hospital_config').update(newConfig).eq('id', existing[0].id);
+      } else {
+        await supabase.from('hospital_config').insert([newConfig]);
+      }
+      await refreshData();
+    } catch (e) { console.error(e); }
   };
 
   return (
