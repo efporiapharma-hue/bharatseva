@@ -3,8 +3,71 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Doctor, Department, Service, Appointment, Notice, HospitalConfig } from '../types';
 
-// Supabase Credentials
+/**
+ * SQL SCHEMA SETUP GUIDE (Run this in your Supabase SQL Editor):
+ * 
+ * -- 1. Create Departments Table
+ * CREATE TABLE departments (
+ *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+ *   name text NOT NULL,
+ *   description text,
+ *   icon text
+ * );
+ * 
+ * -- 2. Create Doctors Table
+ * CREATE TABLE doctors (
+ *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+ *   name text NOT NULL,
+ *   qualification text,
+ *   "departmentId" uuid REFERENCES departments(id),
+ *   photo text,
+ *   "availableDays" text[],
+ *   "timeSlots" text[]
+ * );
+ * 
+ * -- 3. Create Services Table
+ * CREATE TABLE services (
+ *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+ *   title text NOT NULL,
+ *   description text
+ * );
+ * 
+ * -- 4. Create Appointments Table
+ * CREATE TABLE appointments (
+ *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+ *   "patientName" text NOT NULL,
+ *   "patientEmail" text,
+ *   "patientPhone" text,
+ *   "doctorId" uuid REFERENCES doctors(id),
+ *   date text,
+ *   "timeSlot" text,
+ *   status text DEFAULT 'Pending'
+ * );
+ * 
+ * -- 5. Create Notices Table
+ * CREATE TABLE notices (
+ *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+ *   title text NOT NULL,
+ *   content text,
+ *   date text,
+ *   "isImportant" boolean DEFAULT false
+ * );
+ * 
+ * -- 6. Create Hospital Config Table
+ * CREATE TABLE hospital_config (
+ *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+ *   name text,
+ *   logo text,
+ *   address text,
+ *   phone text,
+ *   email text
+ * );
+ */
+
 const SUPABASE_URL = 'https://pserlfetpyqoknfzhppc.supabase.co';
+// WARNING: The key below starts with 'sb_publishable_', which is a Vercel key.
+// Supabase usually requires an 'anon public' key starting with 'eyJ...'.
+// If saving fails, please verify this key in your Supabase Dashboard.
 const SUPABASE_KEY = 'sb_publishable_PVKJQTJ6rOMfjiFC-euVTQ_YMtX9tW9'; 
 
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -36,154 +99,167 @@ interface HospitalContextType {
 
 const HospitalContext = createContext<HospitalContextType | undefined>(undefined);
 
-// Initial Mock Data
-const DEFAULT_DEPTS: Department[] = [
-  { id: '1', name: 'Cardiology', description: 'Advanced heart care and surgery.', icon: 'Heart' },
-  { id: '2', name: 'Orthopedics', description: 'Bone, joint and muscle specialists.', icon: 'Activity' },
-  { id: '3', name: 'Pediatrics', description: 'Comprehensive child healthcare.', icon: 'Users' }
-];
-
-const DEFAULT_DOCTORS: Doctor[] = [
-  { id: '1', name: 'Dr. Vikram Singh', qualification: 'MD, Cardiology', departmentId: '1', photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&h=400&fit=crop', availableDays: ['Mon', 'Wed', 'Fri'], timeSlots: ['10 AM - 12 PM', '4 PM - 6 PM'] },
-  { id: '2', name: 'Dr. Ananya Sharma', qualification: 'MBBS, MS Ortho', departmentId: '2', photo: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=400&h=400&fit=crop', availableDays: ['Tue', 'Thu', 'Sat'], timeSlots: ['11 AM - 2 PM'] }
-];
+const DEFAULT_CONFIG: HospitalConfig = {
+  name: 'Bharat Seva Hospital',
+  logo: 'https://i.ibb.co/68Xk9wL/medical-logo.png',
+  address: '123, Health Avenue, New Delhi, India',
+  phone: '+91 98765 43210',
+  email: 'contact@bharatsevahospital.in'
+};
 
 export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [doctors, setDoctors] = useState<Doctor[]>(DEFAULT_DOCTORS);
-  const [departments, setDepartments] = useState<Department[]>(DEFAULT_DEPTS);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [notices, setNotices] = useState<Notice[]>([
-    { id: '1', title: 'Free Health Camp', content: 'Join us this Sunday for a free cardiac screening camp under PMJAY initiative.', date: '2024-05-20', isImportant: true }
-  ]);
+  const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [dbConnected, setDbConnected] = useState(false);
-  const [config, setConfig] = useState<HospitalConfig>({
-    name: 'Bharat Seva Hospital',
-    logo: 'https://i.ibb.co/68Xk9wL/medical-logo.png',
-    address: '123, Health Avenue, New Delhi, India',
-    phone: '+91 98765 43210',
-    email: 'contact@bharatsevahospital.in'
-  });
+  const [config, setConfig] = useState<HospitalConfig>(DEFAULT_CONFIG);
 
   const refreshData = async () => {
     try {
-      const fetchJobs = [
+      const [rDocs, rDepts, rServs, rApts, rNotes, rCfg] = await Promise.all([
         supabase.from('doctors').select('*'),
         supabase.from('departments').select('*'),
         supabase.from('services').select('*'),
         supabase.from('appointments').select('*').order('date', { ascending: false }),
         supabase.from('notices').select('*').order('date', { ascending: false }),
         supabase.from('hospital_config').select('*').limit(1)
-      ];
+      ]);
 
-      const results = await Promise.all(fetchJobs);
-      const [rDocs, rDepts, rServs, rApts, rNotes, rCfg] = results;
+      if (rDocs.data) setDoctors(rDocs.data);
+      if (rDepts.data) setDepartments(rDepts.data);
+      if (rServs.data) setServices(rServs.data);
+      if (rApts.data) setAppointments(rApts.data);
+      if (rNotes.data) setNotices(rNotes.data);
+      if (rCfg.data && rCfg.data.length > 0) setConfig(rCfg.data[0]);
 
-      if (rDocs.data && rDocs.data.length > 0) setDoctors(rDocs.data);
-      if (rDepts.data && rDepts.data.length > 0) setDepartments(rDepts.data);
-      if (rServs.data && rServs.data.length > 0) setServices(rServs.data);
-      if (rApts.data && rApts.data.length > 0) setAppointments(rApts.data);
-      if (rNotes.data && rNotes.data.length > 0) setNotices(rNotes.data);
-      
-      if (rCfg.data && rCfg.data.length > 0) {
-        setConfig(rCfg.data[0]);
-      }
-
-      const hasError = results.some(r => r.error);
-      setDbConnected(!hasError);
-
+      setDbConnected(![rDocs, rDepts, rServs, rApts, rNotes, rCfg].some(r => r.error));
     } catch (error) {
-      console.error('HospitalApp: Sync Error:', error);
-      setDbConnected(false);
+      console.error('Data sync failed:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  // Real-time synchronization across browsers
   useEffect(() => {
     refreshData();
-    const timer = setTimeout(() => setLoading(false), 1500);
-    return () => clearTimeout(timer);
+    
+    const tables = ['doctors', 'departments', 'services', 'appointments', 'notices', 'hospital_config'];
+    const channels = tables.map(table => 
+      supabase.channel(`public:${table}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+          console.log(`Change detected in ${table}, refreshing...`);
+          refreshData();
+        })
+        .subscribe()
+    );
+
+    return () => {
+      channels.forEach(channel => supabase.removeChannel(channel));
+    };
   }, []);
 
-  // Write Operations with Optimistic Updates
+  const handleError = (error: any, operation: string) => {
+    console.error(`Database Error during ${operation}:`, error);
+    alert(`Could not save to database. This is likely due to the Vercel key format. Please check console for details.`);
+  };
+
   const addDoctor = async (doc: Omit<Doctor, 'id'>) => {
-    const tempId = Math.random().toString();
-    const newDoc = { ...doc, id: tempId };
-    setDoctors(prev => [...prev, newDoc]); // Optimistic update
-    try { await supabase.from('doctors').insert([doc]); } catch (e) { console.error(e); }
+    setDoctors(prev => [...prev, { ...doc, id: 'temp' }]); // Optimistic UI
+    const { error } = await supabase.from('doctors').insert([doc]);
+    if (error) handleError(error, 'Add Doctor');
+    await refreshData();
   };
 
   const updateDoctor = async (id: string, doc: Partial<Doctor>) => {
-    setDoctors(prev => prev.map(d => d.id === id ? { ...d, ...doc } : d)); // Optimistic
-    try { await supabase.from('doctors').update(doc).eq('id', id); } catch (e) { console.error(e); }
+    setDoctors(prev => prev.map(d => d.id === id ? { ...d, ...doc } : d));
+    const { error } = await supabase.from('doctors').update(doc).eq('id', id);
+    if (error) handleError(error, 'Update Doctor');
+    await refreshData();
   };
 
   const removeDoctor = async (id: string) => {
-    setDoctors(prev => prev.filter(d => d.id !== id)); // Optimistic
-    try { await supabase.from('doctors').delete().eq('id', id); } catch (e) { console.error(e); }
+    setDoctors(prev => prev.filter(d => d.id !== id));
+    const { error } = await supabase.from('doctors').delete().eq('id', id);
+    if (error) handleError(error, 'Remove Doctor');
+    await refreshData();
   };
 
   const addDepartment = async (dept: Omit<Department, 'id'>) => {
-    const tempId = Math.random().toString();
-    setDepartments(prev => [...prev, { ...dept, id: tempId }]); // Optimistic
-    try { await supabase.from('departments').insert([dept]); } catch (e) { console.error(e); }
+    setDepartments(prev => [...prev, { ...dept, id: 'temp' }]);
+    const { error } = await supabase.from('departments').insert([dept]);
+    if (error) handleError(error, 'Add Department');
+    await refreshData();
   };
 
   const removeDepartment = async (id: string) => {
-    setDepartments(prev => prev.filter(d => d.id !== id)); // Optimistic
-    try { await supabase.from('departments').delete().eq('id', id); } catch (e) { console.error(e); }
+    setDepartments(prev => prev.filter(d => d.id !== id));
+    const { error } = await supabase.from('departments').delete().eq('id', id);
+    if (error) handleError(error, 'Remove Department');
+    await refreshData();
   };
 
   const addService = async (service: Omit<Service, 'id'>) => {
-    const tempId = Math.random().toString();
-    setServices(prev => [...prev, { ...service, id: tempId }]); // Optimistic
-    try { await supabase.from('services').insert([service]); } catch (e) { console.error(e); }
+    setServices(prev => [...prev, { ...service, id: 'temp' }]);
+    const { error } = await supabase.from('services').insert([service]);
+    if (error) handleError(error, 'Add Service');
+    await refreshData();
   };
 
   const removeService = async (id: string) => {
-    setServices(prev => prev.filter(s => s.id !== id)); // Optimistic
-    try { await supabase.from('services').delete().eq('id', id); } catch (e) { console.error(e); }
+    setServices(prev => prev.filter(s => s.id !== id));
+    const { error } = await supabase.from('services').delete().eq('id', id);
+    if (error) handleError(error, 'Remove Service');
+    await refreshData();
   };
 
   const addNotice = async (notice: Omit<Notice, 'id'>) => {
-    const tempId = Math.random().toString();
-    setNotices(prev => [{ ...notice, id: tempId }, ...prev]); // Optimistic
-    try { await supabase.from('notices').insert([notice]); } catch (e) { console.error(e); }
+    setNotices(prev => [{ ...notice, id: 'temp' }, ...prev]);
+    const { error } = await supabase.from('notices').insert([notice]);
+    if (error) handleError(error, 'Add Notice');
+    await refreshData();
   };
 
   const removeNotice = async (id: string) => {
-    setNotices(prev => prev.filter(n => n.id !== id)); // Optimistic
-    try { await supabase.from('notices').delete().eq('id', id); } catch (e) { console.error(e); }
+    setNotices(prev => prev.filter(n => n.id !== id));
+    const { error } = await supabase.from('notices').delete().eq('id', id);
+    if (error) handleError(error, 'Remove Notice');
+    await refreshData();
   };
 
   const bookAppointment = async (apt: Omit<Appointment, 'id' | 'status'>) => {
-    const tempId = Math.random().toString();
-    setAppointments(prev => [{ ...apt, id: tempId, status: 'Pending' }, ...prev]); // Optimistic
-    try { await supabase.from('appointments').insert([{ ...apt, status: 'Pending' }]); } catch (e) { console.error(e); }
+    setAppointments(prev => [{ ...apt, id: 'temp', status: 'Pending' }, ...prev]);
+    const { error } = await supabase.from('appointments').insert([{ ...apt, status: 'Pending' }]);
+    if (error) handleError(error, 'Book Appointment');
+    await refreshData();
   };
 
   const updateAppointment = async (id: string, apt: Partial<Appointment>) => {
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, ...apt } : a)); // Optimistic
-    try { await supabase.from('appointments').update(apt).eq('id', id); } catch (e) { console.error(e); }
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, ...apt } : a));
+    const { error } = await supabase.from('appointments').update(apt).eq('id', id);
+    if (error) handleError(error, 'Update Appointment');
+    await refreshData();
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a)); // Optimistic
-    try { await supabase.from('appointments').update({ status }).eq('id', id); } catch (e) { console.error(e); }
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    const { error } = await supabase.from('appointments').update({ status }).eq('id', id);
+    if (error) handleError(error, 'Update Status');
+    await refreshData();
   };
 
   const updateConfig = async (newConfig: Partial<HospitalConfig>) => {
-    setConfig(prev => ({ ...prev, ...newConfig })); // Optimistic
-    try {
-      const { data: existing } = await supabase.from('hospital_config').select('id').limit(1);
-      if (existing && existing.length > 0) {
-        await supabase.from('hospital_config').update(newConfig).eq('id', existing[0].id);
-      } else {
-        await supabase.from('hospital_config').insert([newConfig]);
-      }
-    } catch (e) { console.error(e); }
+    setConfig(prev => ({ ...prev, ...newConfig }));
+    const { data: existing } = await supabase.from('hospital_config').select('id').limit(1);
+    const { error } = existing && existing.length > 0 
+      ? await supabase.from('hospital_config').update(newConfig).eq('id', existing[0].id)
+      : await supabase.from('hospital_config').insert([newConfig]);
+    
+    if (error) handleError(error, 'Update Config');
+    await refreshData();
   };
 
   return (
