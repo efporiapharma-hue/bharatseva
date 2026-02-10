@@ -17,7 +17,8 @@ import {
   Upload,
   Camera,
   Lock,
-  LogIn
+  LogIn,
+  AlertCircle
 } from 'lucide-react';
 import { Appointment, Doctor } from '../types';
 
@@ -45,7 +46,7 @@ const Admin = () => {
     departmentId: '', 
     photo: '', 
     availableDays: 'Mon, Wed, Fri', 
-    timeSlots: '10 AM - 1 PM' 
+    timeSlots: '10:00 AM - 1:00 PM, 4:00 PM - 7:00 PM' 
   });
 
   useEffect(() => {
@@ -73,6 +74,10 @@ const Admin = () => {
 
   const handleDocAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newDoc.photo) {
+      alert("Please upload a specialist portrait.");
+      return;
+    }
     try {
       await addDoctor({
         ...newDoc,
@@ -85,11 +90,11 @@ const Admin = () => {
         departmentId: departments[0]?.id || '', 
         photo: '', 
         availableDays: 'Mon, Wed, Fri', 
-        timeSlots: '10 AM - 1 PM' 
+        timeSlots: '10:00 AM - 1:00 PM, 4:00 PM - 7:00 PM' 
       });
-      alert('Doctor registered successfully and synced!');
+      alert('Doctor registered successfully!');
     } catch (err) {
-      alert('Failed to register doctor. Check Supabase connection.');
+      alert('Failed to register doctor.');
     }
   };
 
@@ -117,22 +122,9 @@ const Admin = () => {
 
   const handleNoticeAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    await addNotice({ ...newNotice, date: new Date().toLocaleDateString() });
+    await addNotice({ ...newNotice, date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) });
     setNewNotice({ title: '', content: '', isImportant: false });
-    alert('Notice published globally!');
-  };
-
-  const startEditingApt = (apt: Appointment) => {
-    setEditingAptId(apt.id);
-    setEditAptData(apt);
-  };
-
-  const saveAptEdit = async () => {
-    if (editingAptId) {
-      await updateAppointment(editingAptId, editAptData);
-      setEditingAptId(null);
-      alert('Appointment updated successfully!');
-    }
+    alert('Announcement published!');
   };
 
   if (!isLoggedIn) {
@@ -276,39 +268,6 @@ const Admin = () => {
                     </div>
                   </div>
                </div>
-
-               <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
-                  <h3 className="text-xl font-black mb-8 flex items-center text-gray-800">Operational Contacts</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div>
-                      <label className={labelClasses}>Emergency Phone</label>
-                      <input 
-                        type="text" 
-                        value={config.phone} 
-                        onChange={(e) => updateConfig({ phone: e.target.value })}
-                        className={inputClasses}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClasses}>Official Email</label>
-                      <input 
-                        type="email" 
-                        value={config.email} 
-                        onChange={(e) => updateConfig({ email: e.target.value })}
-                        className={inputClasses}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className={labelClasses}>Main Physical Address</label>
-                      <textarea 
-                        value={config.address} 
-                        onChange={(e) => updateConfig({ address: e.target.value })}
-                        className={`${inputClasses} resize-none`}
-                        rows={3}
-                      ></textarea>
-                    </div>
-                  </div>
-               </div>
             </div>
           )}
 
@@ -316,7 +275,7 @@ const Admin = () => {
           {activeTab === 'doctors' && (
             <div className="space-y-12">
                <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
-                  <h3 className="text-xl font-black mb-10 flex items-center text-gray-800"><Plus className="mr-3 text-[#FF9933]" /> Register New Specialist</h3>
+                  <h3 className="text-xl font-black mb-10 flex items-center text-gray-800"><Plus className="mr-3 text-emerald-600" /> Register New Specialist</h3>
                   <form onSubmit={handleDocAdd} className="space-y-8">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                       <div className="lg:col-span-1">
@@ -328,10 +287,10 @@ const Admin = () => {
                           {newDoc.photo ? (
                             <img src={newDoc.photo} alt="Preview" className="w-full h-full object-cover" />
                           ) : (
-                            <>
-                              <Camera size={32} className="text-emerald-600 mb-4" />
-                              <span className="text-sm font-bold text-gray-400">Upload Photo</span>
-                            </>
+                            <div className="text-center">
+                              <Camera size={32} className="text-emerald-600 mb-2 mx-auto" />
+                              <span className="text-xs font-bold text-gray-400">Upload Photo</span>
+                            </div>
                           )}
                         </div>
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
@@ -355,9 +314,19 @@ const Admin = () => {
                              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                            </select>
                         </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                             <label className={labelClasses}>Working Days (Comma separated)</label>
+                             <input placeholder="Mon, Wed, Fri" className={inputClasses} value={newDoc.availableDays} onChange={e => setNewDoc({...newDoc, availableDays: e.target.value})} required />
+                          </div>
+                          <div>
+                             <label className={labelClasses}>Time Slots (Comma separated)</label>
+                             <input placeholder="10:00 AM - 1:00 PM" className={inputClasses} value={newDoc.timeSlots} onChange={e => setNewDoc({...newDoc, timeSlots: e.target.value})} required />
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <button type="submit" className="w-full bg-[#FF9933] text-white py-5 rounded-[1.5rem] font-black text-xl shadow-2xl hover:bg-orange-600 transition-all">
+                    <button type="submit" className="w-full bg-emerald-600 text-white py-5 rounded-[1.5rem] font-black text-xl shadow-2xl hover:bg-emerald-700 transition-all">
                       Register Specialist
                     </button>
                   </form>
@@ -373,11 +342,62 @@ const Admin = () => {
                             <p className="text-[10px] text-gray-400 font-bold uppercase">{departments.find(d => d.id === doc.departmentId)?.name}</p>
                          </div>
                        </div>
-                       <button onClick={() => removeDoctor(doc.id)} className="text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                       <button onClick={() => removeDoctor(doc.id)} className="text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2 hover:bg-red-50 rounded-lg">
                          <Trash2 size={20} />
                        </button>
                     </div>
                   ))}
+               </div>
+            </div>
+          )}
+
+          {/* Notices Tab */}
+          {activeTab === 'notices' && (
+            <div className="space-y-12">
+               <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
+                  <h3 className="text-xl font-black mb-10 flex items-center text-gray-800"><Bell className="mr-3 text-emerald-600" /> New Announcement</h3>
+                  <form onSubmit={handleNoticeAdd} className="space-y-6">
+                    <div>
+                       <label className={labelClasses}>Notice Title</label>
+                       <input placeholder="Free Health Camp" className={inputClasses} value={newNotice.title} onChange={e => setNewNotice({...newNotice, title: e.target.value})} required />
+                    </div>
+                    <div>
+                       <label className={labelClasses}>Detailed Content</label>
+                       <textarea placeholder="Write announcement details here..." className={`${inputClasses} resize-none`} rows={4} value={newNotice.content} onChange={e => setNewNotice({...newNotice, content: e.target.value})} required />
+                    </div>
+                    <div className="flex items-center space-x-3">
+                       <input type="checkbox" id="important" checked={newNotice.isImportant} onChange={e => setNewNotice({...newNotice, isImportant: e.target.checked})} className="w-5 h-5 accent-emerald-600" />
+                       <label htmlFor="important" className="font-bold text-gray-700">Mark as High Importance (Orange Badge)</label>
+                    </div>
+                    <button type="submit" className="w-full bg-emerald-600 text-white py-5 rounded-[1.5rem] font-black text-xl shadow-2xl hover:bg-emerald-700 transition-all">
+                      Publish Announcement
+                    </button>
+                  </form>
+               </div>
+
+               <div className="space-y-4">
+                  {notices.map(notice => (
+                    <div key={notice.id} className={`p-6 rounded-3xl border flex items-center justify-between ${notice.isImportant ? 'bg-orange-50 border-orange-100' : 'bg-white border-gray-100'}`}>
+                       <div className="flex items-center space-x-4">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${notice.isImportant ? 'bg-orange-600 text-white' : 'bg-emerald-100 text-emerald-600'}`}>
+                             <Bell size={20} />
+                          </div>
+                          <div>
+                             <h4 className="font-black text-gray-900">{notice.title}</h4>
+                             <p className="text-xs text-gray-500 font-bold">{notice.date}</p>
+                          </div>
+                       </div>
+                       <button onClick={() => removeNotice(notice.id)} className="text-red-500 p-2 hover:bg-red-100 rounded-xl transition-colors">
+                          <Trash2 size={20} />
+                       </button>
+                    </div>
+                  ))}
+                  {notices.length === 0 && (
+                    <div className="text-center py-20 bg-gray-100 rounded-3xl border-2 border-dashed border-gray-200">
+                       <AlertCircle className="mx-auto text-gray-400 mb-4" size={48} />
+                       <p className="font-bold text-gray-500 uppercase tracking-widest text-sm">No announcements published yet</p>
+                    </div>
+                  )}
                </div>
             </div>
           )}
@@ -435,7 +455,7 @@ const Admin = () => {
                         e.preventDefault();
                         await addDepartment(newDept);
                         setNewDept({ name: '', description: '', icon: '' });
-                        alert('Department created and synced!');
+                        alert('Department created!');
                       }}>
                         <input placeholder="Cardiology" className={inputClasses} value={newDept.name} onChange={e => setNewDept({...newDept, name: e.target.value})} required />
                         <textarea placeholder="Description" className={`${inputClasses} resize-none`} rows={3} value={newDept.description} onChange={e => setNewDept({...newDept, description: e.target.value})} required />
@@ -448,7 +468,7 @@ const Admin = () => {
                         e.preventDefault();
                         await addService(newService);
                         setNewService({ title: '', description: '' });
-                        alert('Service registered and synced!');
+                        alert('Service registered!');
                       }}>
                         <input placeholder="24/7 ICU" className={inputClasses} value={newService.title} onChange={e => setNewService({...newService, title: e.target.value})} required />
                         <textarea placeholder="Description" className={`${inputClasses} resize-none`} rows={3} value={newService.description} onChange={e => setNewService({...newService, description: e.target.value})} required />
