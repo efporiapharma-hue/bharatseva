@@ -8,29 +8,17 @@ import {
   Clock, 
   ArrowRight,
   Bell,
-  CalendarCheck,
   Activity,
   Award,
   Heart,
-  Loader2
+  Loader
 } from 'lucide-react';
 
 const Home = () => {
   const { config, notices, loading } = useHospital();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="flex flex-col items-center">
-          <Loader2 className="animate-spin text-emerald-600 mb-4" size={48} />
-          <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Connecting to Care Network...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Safe split handling for hospital name
-  const nameParts = config?.name ? config.name.split(' ') : ['Hospital'];
+  // Defensive checks to prevent splitting errors if config isn't loaded
+  const nameParts = (config?.name || 'Bharat Seva Hospital').split(' ');
   const firstName = nameParts[0];
   const restOfName = nameParts.slice(1).join(' ');
 
@@ -49,6 +37,12 @@ const Home = () => {
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl text-gray-900">
+            {loading && (
+              <div className="flex items-center space-x-2 mb-4 bg-emerald-50 text-emerald-700 w-fit px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+                <Loader className="animate-spin" size={12} />
+                <span>Syncing Database...</span>
+              </div>
+            )}
             <div className="inline-flex items-center bg-emerald-600 text-white px-4 py-1.5 rounded-full mb-8 text-xs font-bold tracking-widest uppercase shadow-lg">
               <ShieldCheck size={16} className="mr-2" />
               Trusted Healthcare Partner
@@ -110,7 +104,7 @@ const Home = () => {
       </section>
 
       {/* Announcements */}
-      {notices.length > 0 && (
+      {(notices || []).length > 0 && (
         <section className="py-24 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex flex-col md:flex-row justify-between items-center mb-12 text-center md:text-left">

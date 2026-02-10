@@ -19,19 +19,17 @@ import {
   Menu, 
   X, 
   ChevronRight,
-  ShieldCheck,
   LayoutDashboard,
   Facebook,
   Twitter,
   Instagram,
   Send,
-  FileText,
-  Globe
+  WifiOff
 } from 'lucide-react';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
-  const { config } = useHospital();
+  const { config, dbConnected } = useHospital();
   const location = useLocation();
 
   const navLinks = [
@@ -56,9 +54,14 @@ const Navbar = () => {
                 <Heart className="text-white" size={24} />
               </div>
               <span className="text-xl font-bold text-gray-900 hidden md:block uppercase tracking-tight">
-                {config.name}
+                {config?.name || 'Bharat Seva Hospital'}
               </span>
             </Link>
+            {!dbConnected && (
+              <div className="ml-4 flex items-center text-red-500 text-[10px] font-bold uppercase tracking-widest bg-red-50 px-2 py-1 rounded-full">
+                <WifiOff size={10} className="mr-1" /> Offline Mode
+              </div>
+            )}
           </div>
 
           <div className="hidden lg:flex items-center space-x-8">
@@ -142,7 +145,7 @@ const Footer = () => {
                <div className="bg-emerald-600 p-2 rounded-lg">
                  <Heart className="text-white" size={24} />
                </div>
-               <h3 className="text-2xl font-bold tracking-tight">{config.name}</h3>
+               <h3 className="text-2xl font-bold tracking-tight">{config?.name || 'Bharat Seva Hospital'}</h3>
             </div>
             <p className="text-gray-700 mb-8 leading-relaxed text-sm font-medium">
               Leading the way in medical excellence with state-of-the-art facilities and compassionate care. Official empanelled provider for Ayushman Bharat PM-JAY.
@@ -157,7 +160,7 @@ const Footer = () => {
           <div>
             <h4 className="text-sm font-black uppercase tracking-[0.2em] text-emerald-800 mb-8 pb-2 border-b-2 border-emerald-50 inline-block">Departments</h4>
             <ul className="space-y-4">
-              {departments.slice(0, 5).map(dept => (
+              {(departments || []).slice(0, 5).map(dept => (
                 <li key={dept.id}>
                   <Link to="/departments" className="text-gray-800 hover:text-emerald-600 transition-colors flex items-center text-sm font-bold">
                     <ChevronRight size={14} className="mr-2 text-emerald-600" /> {dept.name}
@@ -191,10 +194,6 @@ const Footer = () => {
                   <Send size={18} />
                 </button>
               </div>
-              <div className="flex items-center space-x-2 text-emerald-700 font-bold text-xs uppercase tracking-tighter hover:underline cursor-pointer">
-                <Globe size={14} />
-                <span>Visit digital portal</span>
-              </div>
             </div>
           </div>
 
@@ -203,15 +202,15 @@ const Footer = () => {
             <div className="space-y-4 text-gray-600">
               <div className="flex items-start">
                 <MapPin className="mr-3 text-emerald-600 mt-1 shrink-0" size={16} />
-                <span className="text-xs leading-relaxed font-bold text-gray-800">{config.address}</span>
+                <span className="text-xs leading-relaxed font-bold text-gray-800">{config?.address || 'Address loading...'}</span>
               </div>
               <div className="flex items-center">
                 <Phone className="mr-3 text-emerald-600 shrink-0" size={16} />
-                <span className="text-xs font-bold text-gray-800">{config.phone}</span>
+                <span className="text-xs font-bold text-gray-800">{config?.phone || 'Loading...'}</span>
               </div>
               <div className="flex items-center">
                 <Mail className="mr-3 text-emerald-600 shrink-0" size={16} />
-                <span className="text-xs font-bold text-gray-800">{config.email}</span>
+                <span className="text-xs font-bold text-gray-800">{config?.email || 'Loading...'}</span>
               </div>
             </div>
           </div>
@@ -219,7 +218,7 @@ const Footer = () => {
         
         <div className="border-t border-gray-100 pt-8 flex flex-col md:flex-row justify-between items-center text-[11px] font-bold text-gray-500 uppercase tracking-widest text-center md:text-left">
            <p className="mb-4 md:mb-0">
-             © 2026 {config.name}. Professional Healthcare. All Rights Reserved. <span className="text-emerald-600 ml-1">website developed by digital communique</span>
+             © 2026 {config?.name || 'Bharat Seva Hospital'}. Professional Healthcare. All Rights Reserved. <span className="text-emerald-600 ml-1">website developed by digital communique</span>
            </p>
            <div className="flex space-x-6">
              <span className="hover:text-emerald-600 cursor-pointer">Ayushman Bharat Partner</span>
