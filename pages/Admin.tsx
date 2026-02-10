@@ -150,12 +150,12 @@ const Admin = () => {
              </button>
           </div>
 
-          {/* Configuration Tab */}
+          {/* Config Tab */}
           {activeTab === 'config' && (
             <div className="bg-white p-12 rounded-[3.5rem] shadow-xl border border-gray-100 space-y-12 animate-in fade-in zoom-in-95 duration-500">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
                  <div className="lg:col-span-1">
-                    <label className={labelClasses}>Hospital Identity (Logo)</label>
+                    <label className={labelClasses}>Logo URL</label>
                     <div className="p-6 bg-gray-50 border-2 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center space-y-4">
                       {localConfig.logo ? <img src={localConfig.logo} className="h-32 object-contain" /> : <ImageIcon className="text-gray-300" size={48} />}
                       <input className={inputClasses} value={localConfig.logo} placeholder="https://..." onChange={e => setLocalConfig({...localConfig, logo: e.target.value})} />
@@ -168,32 +168,75 @@ const Admin = () => {
                     <div><label className={labelClasses}>Physical Address</label><input className={inputClasses} value={localConfig.address} onChange={e => setLocalConfig({...localConfig, address: e.target.value})} /></div>
                  </div>
               </div>
-              <button onClick={() => updateConfig(localConfig)} className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg hover:bg-emerald-700 shadow-xl uppercase transition-all active:scale-95">Save Registry Details</button>
+              <button onClick={() => updateConfig(localConfig)} className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg hover:bg-emerald-700 shadow-xl uppercase transition-all active:scale-95">Update Hospital Registry</button>
             </div>
           )}
 
-          {/* Appointments Tab - Redesigned with Empty State Handling */}
+          {/* Doctors Tab - Restored */}
+          {activeTab === 'doctors' && (
+            <div className="space-y-12 animate-in fade-in duration-500">
+               <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-gray-100">
+                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><Plus className="mr-2"/> New Specialist Registry</h3>
+                  <form onSubmit={handleDocAdd} className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                    <div className="lg:col-span-1">
+                      <label className={labelClasses}>Portrait Upload</label>
+                      <div onClick={() => fileInputRef.current?.click()} className="w-full aspect-square bg-gray-50 border-4 border-dashed rounded-[3rem] flex flex-col items-center justify-center cursor-pointer overflow-hidden border-gray-100">
+                        {newDoc.photo ? <img src={newDoc.photo} className="w-full h-full object-cover" /> : <div className="text-center"><Camera size={48} className="text-gray-200 mx-auto" /><p className="text-[10px] font-black text-gray-300 uppercase mt-2">Click to Upload</p></div>}
+                      </div>
+                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) { const r = new FileReader(); r.onloadend = () => setNewDoc({...newDoc, photo: r.result as string}); r.readAsDataURL(file); }
+                      }} />
+                    </div>
+                    <div className="lg:col-span-2 space-y-8">
+                      <div className="grid grid-cols-2 gap-8">
+                        <div><label className={labelClasses}>Full Name</label><input className={inputClasses} value={newDoc.name} onChange={e => setNewDoc({...newDoc, name: e.target.value})} required /></div>
+                        <div><label className={labelClasses}>Qualifications</label><input className={inputClasses} value={newDoc.qualification} onChange={e => setNewDoc({...newDoc, qualification: e.target.value})} required /></div>
+                      </div>
+                      <div><label className={labelClasses}>Clinical Department</label><select className={inputClasses} value={newDoc.departmentId} onChange={e => setNewDoc({...newDoc, departmentId: e.target.value})} required><option value="">Select Department...</option>{departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
+                      <div className="grid grid-cols-2 gap-8">
+                        <div><label className={labelClasses}>Working Days</label><input className={inputClasses} value={newDoc.availableDays} onChange={e => setNewDoc({...newDoc, availableDays: e.target.value})} /></div>
+                        <div><label className={labelClasses}>Hours (Time Slots)</label><input className={inputClasses} value={newDoc.timeSlots} onChange={e => setNewDoc({...newDoc, timeSlots: e.target.value})} /></div>
+                      </div>
+                      <button type="submit" disabled={isAddingDoc} className="w-full bg-emerald-600 text-white py-6 rounded-3xl font-black text-xl hover:bg-emerald-700 shadow-xl uppercase">{isAddingDoc ? 'Registering...' : 'Register Specialist'}</button>
+                    </div>
+                  </form>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {doctors.length === 0 ? (
+                    <div className="col-span-full py-10 text-center text-gray-400 font-bold uppercase tracking-widest border-2 border-dashed rounded-[3rem]">No doctors registered</div>
+                  ) : doctors.map(doc => (
+                    <div key={doc.id} className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-gray-100 flex items-center justify-between group">
+                       <div className="flex items-center space-x-6">
+                         <img src={doc.photo} className="w-16 h-16 rounded-2xl object-cover border-4 border-emerald-50" />
+                         <div>
+                            <h4 className="font-black text-gray-900">{doc.name}</h4>
+                            <p className="text-[10px] text-emerald-600 font-black uppercase">{departments.find(d => d.id === doc.departmentId)?.name || 'General'}</p>
+                         </div>
+                       </div>
+                       <button onClick={() => { if(confirm("Remove this specialist?")) removeDoctor(doc.id) }} className="text-red-300 hover:text-red-600 p-3"><Trash2 size={24} /></button>
+                    </div>
+                  ))}
+               </div>
+            </div>
+          )}
+
+          {/* Appointments Tab */}
           {activeTab === 'appointments' && (
             <div className="space-y-12 animate-in fade-in duration-500">
                {/* Manual Booking Form */}
                <div className="bg-white p-12 lg:p-16 rounded-[3.5rem] shadow-2xl border border-gray-100">
-                  <div className="flex justify-between items-start mb-12">
-                    <div>
-                      <h3 className="text-2xl font-black text-emerald-900 uppercase tracking-tighter">Manual Consultation Log</h3>
-                      <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Directly register walk-in patients to the system</p>
-                    </div>
-                    <UserPlus className="text-emerald-600" size={32} />
-                  </div>
+                  <h3 className="text-2xl font-black text-emerald-900 uppercase tracking-tighter mb-12">Consultation Log</h3>
                   <form onSubmit={handleManualBooking} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div><label className={labelClasses}>Patient Full Name</label><input className={inputClasses} placeholder="e.g. Vikram Batra" value={newApt.patientName} onChange={e => setNewApt({...newApt, patientName: e.target.value})} required /></div>
-                    <div><label className={labelClasses}>Phone Number</label><input className={inputClasses} placeholder="+91 00000 00000" value={newApt.patientPhone} onChange={e => setNewApt({...newApt, patientPhone: e.target.value})} required /></div>
-                    <div><label className={labelClasses}>Assigned Specialist</label><select className={inputClasses} value={newApt.doctorId} onChange={e => setNewApt({...newApt, doctorId: e.target.value})} required><option value="">Choose Doctor...</option>{doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
+                    <div><label className={labelClasses}>Patient Name</label><input className={inputClasses} value={newApt.patientName} onChange={e => setNewApt({...newApt, patientName: e.target.value})} required /></div>
+                    <div><label className={labelClasses}>Contact Number</label><input className={inputClasses} value={newApt.patientPhone} onChange={e => setNewApt({...newApt, patientPhone: e.target.value})} required /></div>
+                    <div><label className={labelClasses}>Assigned Doctor</label><select className={inputClasses} value={newApt.doctorId} onChange={e => setNewApt({...newApt, doctorId: e.target.value})} required><option value="">Select Doctor...</option>{doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div><label className={labelClasses}>Consultation Date</label><input className={inputClasses} type="date" value={newApt.date} onChange={e => setNewApt({...newApt, date: e.target.value})} required /></div>
-                      <div><label className={labelClasses}>Time Slot</label><input className={inputClasses} placeholder="11:30 AM" value={newApt.timeSlot} onChange={e => setNewApt({...newApt, timeSlot: e.target.value})} required /></div>
+                      <div><label className={labelClasses}>Date</label><input className={inputClasses} type="date" value={newApt.date} onChange={e => setNewApt({...newApt, date: e.target.value})} required /></div>
+                      <div><label className={labelClasses}>Slot</label><input className={inputClasses} value={newApt.timeSlot} onChange={e => setNewApt({...newApt, timeSlot: e.target.value})} required /></div>
                     </div>
                     <div className="md:col-span-2">
-                      <button type="submit" disabled={isAddingApt} className="w-full bg-emerald-600 text-white py-8 rounded-[2rem] font-black text-2xl shadow-xl hover:bg-emerald-700 uppercase tracking-[0.2em] transition-all active:scale-95">{isAddingApt ? 'Writing to DB...' : 'BOOK NOW'}</button>
+                      <button type="submit" disabled={isAddingApt} className="w-full bg-emerald-600 text-white py-8 rounded-[2rem] font-black text-2xl shadow-xl hover:bg-emerald-700 uppercase tracking-widest">{isAddingApt ? 'Booking...' : 'Book Consultation'}</button>
                     </div>
                   </form>
                </div>
@@ -201,15 +244,7 @@ const Admin = () => {
                {/* Queue Management */}
                <div className="bg-white rounded-[3.5rem] shadow-2xl border border-gray-100 overflow-hidden">
                  <div className="p-10 border-b border-gray-100 bg-emerald-50/20 flex flex-col md:flex-row justify-between items-center gap-6">
-                   <div className="flex items-center space-x-4">
-                      <div className="p-4 bg-emerald-600 rounded-2xl text-white shadow-lg shadow-emerald-200"><History size={28} /></div>
-                      <div>
-                        <h3 className="text-2xl font-black text-emerald-900 uppercase tracking-tighter">Consultation Registry</h3>
-                        <div className="flex items-center space-x-2 mt-1">
-                          <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-black uppercase">{appointments.length} Total Records</span>
-                        </div>
-                      </div>
-                   </div>
+                   <h3 className="text-2xl font-black text-emerald-900 uppercase">Consultation Registry</h3>
                    <div className="flex bg-white p-2 rounded-2xl border-2 border-emerald-50 shadow-sm">
                       {['All', 'Pending', 'Confirmed', 'Cancelled'].map(filter => (
                         <button key={filter} onClick={() => setStatusFilter(filter as any)} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${statusFilter === filter ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-400 hover:text-emerald-600'}`}>
@@ -221,29 +256,20 @@ const Admin = () => {
                  <div className="overflow-x-auto">
                    <table className="w-full text-left">
                       <thead className="bg-gray-50 border-b border-gray-100 text-[10px] font-black uppercase text-gray-400 tracking-[0.2em]">
-                        <tr><th className="px-10 py-6">Patient Profile</th><th className="px-10 py-6">Medical Specialist</th><th className="px-10 py-6">Current Status</th><th className="px-10 py-6 text-right">Actions</th></tr>
+                        <tr><th className="px-10 py-6">Patient</th><th className="px-10 py-6">Doctor / Date</th><th className="px-10 py-6">Status</th><th className="px-10 py-6 text-right">Actions</th></tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {filteredAppointments.length === 0 ? (
-                          <tr><td colSpan={4} className="py-24 text-center">
-                            <div className="flex flex-col items-center justify-center opacity-30">
-                              <CloudOff size={64} className="mb-4 text-gray-400" />
-                              <h4 className="font-black text-gray-400 uppercase tracking-[0.4em]">Empty Queue</h4>
-                              <p className="text-xs font-bold text-gray-400 mt-2 uppercase">No appointments found in database</p>
-                              <button onClick={() => refreshData(true)} className="mt-6 flex items-center space-x-2 bg-gray-100 px-6 py-2 rounded-full hover:bg-emerald-50 hover:text-emerald-600 transition-all font-black text-[10px] uppercase">
-                                <RefreshCw size={12} /> <span>Re-Sync Database</span>
-                              </button>
-                            </div>
-                          </td></tr>
+                          <tr><td colSpan={4} className="py-24 text-center opacity-30 font-black uppercase tracking-widest">No matching consultations</td></tr>
                         ) : filteredAppointments.map(apt => (
-                          <tr key={apt.id} className="hover:bg-emerald-50/10 transition-colors">
+                          <tr key={apt.id} className="hover:bg-emerald-50/10">
                             <td className="px-10 py-8">
-                               <div className="text-gray-900 font-black text-xl leading-tight">{apt.patientName}</div>
-                               <div className="text-emerald-600 font-bold text-sm tracking-widest uppercase mt-1">{apt.patientPhone}</div>
+                               <div className="text-gray-900 font-black text-lg">{apt.patientName}</div>
+                               <div className="text-emerald-600 font-bold text-xs">{apt.patientPhone}</div>
                             </td>
                             <td className="px-10 py-8">
-                               <div className="text-gray-800 font-black">{doctors.find(d => d.id === apt.doctorId)?.name || 'General Registry'}</div>
-                               <div className="text-[10px] text-gray-400 uppercase tracking-widest font-black mt-1">{apt.date} • {apt.timeSlot}</div>
+                               <div className="text-gray-800 font-bold">{doctors.find(d => d.id === apt.doctorId)?.name || 'General Influx'}</div>
+                               <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">{apt.date} • {apt.timeSlot}</div>
                             </td>
                             <td className="px-10 py-8">
                               <span className={`px-5 py-2 rounded-full text-[10px] uppercase tracking-widest font-black inline-block border ${
@@ -254,10 +280,10 @@ const Admin = () => {
                                 {apt.status}
                               </span>
                             </td>
-                            <td className="px-10 py-8 text-right space-x-3">
-                               <button onClick={() => updateAppointmentStatus(apt.id, 'Confirmed')} title="Approve" className="p-4 text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all shadow-sm border border-emerald-50 active:scale-90"><Check size={20} /></button>
-                               <button onClick={() => updateAppointmentStatus(apt.id, 'Cancelled')} title="Reject" className="p-4 text-orange-600 hover:bg-orange-50 rounded-2xl transition-all shadow-sm border border-orange-50 active:scale-90"><X size={20} /></button>
-                               <button onClick={() => { if(confirm("Permanently wipe record?")) removeAppointment(apt.id) }} title="Delete" className="p-4 text-red-400 hover:bg-red-50 rounded-2xl transition-all shadow-sm border border-red-50 active:scale-90"><Trash2 size={20} /></button>
+                            <td className="px-10 py-8 text-right space-x-2">
+                               <button onClick={() => updateAppointmentStatus(apt.id, 'Confirmed')} className="p-3 text-emerald-600 hover:bg-emerald-50 rounded-xl"><Check size={20} /></button>
+                               <button onClick={() => updateAppointmentStatus(apt.id, 'Cancelled')} className="p-3 text-orange-600 hover:bg-orange-50 rounded-xl"><X size={20} /></button>
+                               <button onClick={() => { if(confirm("Permanently wipe record?")) removeAppointment(apt.id) }} className="p-3 text-red-400 hover:bg-red-50 rounded-xl"><Trash2 size={20} /></button>
                             </td>
                           </tr>
                         ))}
@@ -268,21 +294,102 @@ const Admin = () => {
             </div>
           )}
 
-          {/* Fallback tabs (Doctors, Depts, etc) - existing logic but reinforced with dbConnected checks */}
-          {(['doctors', 'depts', 'services', 'notices'].includes(activeTab)) && (
-            <div className="bg-white p-12 rounded-[3.5rem] shadow-xl border border-gray-100 animate-in slide-in-from-bottom-5 duration-500">
-               <div className="flex items-center space-x-4 mb-10 pb-10 border-b border-gray-50">
-                  <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl"><Info size={24} /></div>
-                  <h3 className="text-xl font-black text-emerald-900 uppercase">Management Portal</h3>
+          {/* Departments Tab - Restored */}
+          {activeTab === 'depts' && (
+            <div className="space-y-12 animate-in fade-in duration-500">
+               <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-gray-100">
+                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><LayoutGrid className="mr-2"/> Medical Unit Registry</h3>
+                  <form onSubmit={async (e) => { e.preventDefault(); await addDepartment(newDept); setNewDept({ name: '', description: '', icon: '🏥' }); alert("Department Added!"); }} className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div><label className={labelClasses}>Unit Name</label><input className={inputClasses} value={newDept.name} onChange={e => setNewDept({...newDept, name: e.target.value})} required placeholder="e.g. Cardiology" /></div>
+                      <div><label className={labelClasses}>Visual Icon (Emoji)</label><input className={inputClasses} value={newDept.icon} onChange={e => setNewDept({...newDept, icon: e.target.value})} required /></div>
+                    </div>
+                    <div><label className={labelClasses}>Mission Statement</label><textarea className={`${inputClasses} h-32 resize-none`} value={newDept.description} onChange={e => setNewDept({...newDept, description: e.target.value})} required placeholder="Department capabilities..." /></div>
+                    <button type="submit" className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg uppercase shadow-xl transition-all">Confirm Registration</button>
+                  </form>
                </div>
-               <p className="text-gray-400 font-bold uppercase tracking-[0.2em] mb-4">Functional logic active. Database connectivity verified.</p>
-               <button onClick={() => setActiveTab('appointments')} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-emerald-700 shadow-lg transition-all">Go to Consultations Registry</button>
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {departments.length === 0 ? (
+                    <div className="col-span-full py-10 text-center text-gray-400 font-bold uppercase tracking-widest border-2 border-dashed rounded-[3rem]">No units found</div>
+                  ) : departments.map(dept => (
+                    <div key={dept.id} className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-gray-100 flex items-center justify-between group">
+                       <div className="flex items-center space-x-6">
+                         <div className="text-4xl">{dept.icon}</div>
+                         <div><h4 className="font-black text-gray-900 uppercase tracking-tighter">{dept.name}</h4><p className="text-[10px] text-gray-400 font-bold uppercase line-clamp-1">{dept.description}</p></div>
+                       </div>
+                       <button onClick={() => { if(confirm("Delete department?")) removeDepartment(dept.id) }} className="text-red-200 hover:text-red-600 transition-all"><Trash2 size={20} /></button>
+                    </div>
+                  ))}
+               </div>
+            </div>
+          )}
+
+          {/* Services Tab - Restored */}
+          {activeTab === 'services' && (
+            <div className="space-y-12 animate-in fade-in duration-500">
+               <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-gray-100">
+                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><ShieldPlus className="mr-2"/> Facility Catalog</h3>
+                  <form onSubmit={async (e) => { e.preventDefault(); await addService(newService); setNewService({ title: '', description: '' }); alert("Service Added!"); }} className="space-y-8">
+                    <div><label className={labelClasses}>Facility Title</label><input className={inputClasses} value={newService.title} onChange={e => setNewService({...newService, title: e.target.value})} required placeholder="e.g. 24/7 NICU Support" /></div>
+                    <div><label className={labelClasses}>Technical Details</label><textarea className={`${inputClasses} h-32 resize-none`} value={newService.description} onChange={e => setNewService({...newService, description: e.target.value})} required placeholder="List equipment, hours, etc..." /></div>
+                    <button type="submit" className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg uppercase shadow-xl transition-all">Publish To Catalog</button>
+                  </form>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {services.length === 0 ? (
+                    <div className="col-span-full py-10 text-center text-gray-400 font-bold uppercase tracking-widest border-2 border-dashed rounded-[3rem]">No facilities registered</div>
+                  ) : services.map(service => (
+                    <div key={service.id} className="bg-white p-8 rounded-[2.5rem] shadow-lg border border-gray-100 flex items-center justify-between group">
+                       <div className="flex items-center space-x-6">
+                         <div className="bg-emerald-50 p-4 rounded-2xl text-emerald-600"><BriefcaseMedical size={24} /></div>
+                         <div><h4 className="font-black text-gray-900 leading-tight">{service.title}</h4><p className="text-[10px] text-gray-400 font-bold uppercase line-clamp-1">{service.description}</p></div>
+                       </div>
+                       <button onClick={() => { if(confirm("Remove service?")) removeService(service.id) }} className="text-red-200 hover:text-red-600 transition-all"><Trash2 size={20} /></button>
+                    </div>
+                  ))}
+               </div>
+            </div>
+          )}
+
+          {/* Notices Tab - Restored */}
+          {activeTab === 'notices' && (
+            <div className="space-y-12 animate-in fade-in duration-500">
+               <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-gray-100">
+                  <h3 className="text-xl font-black mb-10 text-emerald-800 uppercase flex items-center"><Bell className="mr-2"/> Medical Bulletin Center</h3>
+                  <form onSubmit={async (e) => { e.preventDefault(); await addNotice(newNotice); setNewNotice({ title: '', content: '', date: new Date().toLocaleDateString(), isImportant: false }); alert("Broadcast Published!"); }} className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div><label className={labelClasses}>Bulletin Title</label><input className={inputClasses} value={newNotice.title} onChange={e => setNewNotice({...newNotice, title: e.target.value})} required /></div>
+                      <div><label className={labelClasses}>Effective Date</label><input className={inputClasses} value={newNotice.date} onChange={e => setNewNotice({...newNotice, date: e.target.value})} required /></div>
+                    </div>
+                    <div><label className={labelClasses}>Alert Message</label><textarea className={`${inputClasses} h-32 resize-none`} value={newNotice.content} onChange={e => setNewNotice({...newNotice, content: e.target.value})} required></textarea></div>
+                    <div className="flex items-center space-x-4 bg-gray-50 p-6 rounded-2xl border-2 border-dashed border-gray-100">
+                      <input type="checkbox" id="imp" checked={newNotice.isImportant} onChange={e => setNewNotice({...newNotice, isImportant: e.target.checked})} className="w-6 h-6 accent-emerald-600 cursor-pointer" />
+                      <label htmlFor="imp" className="font-black text-xs uppercase tracking-widest text-emerald-800 cursor-pointer">Mark as Critical Priority (Broadcast High Alert)</label>
+                    </div>
+                    <button type="submit" className="bg-emerald-600 text-white px-12 py-5 rounded-2xl font-black text-lg uppercase shadow-xl hover:bg-emerald-700 transition-all">Publish Bulletin</button>
+                  </form>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  {notices.length === 0 ? (
+                    <div className="col-span-full py-10 text-center text-gray-300 font-bold uppercase tracking-[0.3em] border-2 border-dashed rounded-[3rem]">No bulletins in history</div>
+                  ) : notices.map(n => (
+                    <div key={n.id} className={`p-10 rounded-[3.5rem] shadow-xl border-4 relative group transition-all ${n.isImportant ? 'bg-red-50 border-red-100' : 'bg-white border-emerald-50'}`}>
+                       {n.isImportant && <div className="absolute top-0 right-10 bg-red-600 text-white text-[10px] font-black uppercase px-5 py-2 rounded-b-xl shadow-lg">High Alert</div>}
+                       <h4 className="font-black text-2xl mb-4 text-gray-900 leading-tight">{n.title}</h4>
+                       <p className="text-gray-500 text-sm font-bold leading-relaxed mb-8 line-clamp-4">{n.content}</p>
+                       <div className="flex justify-between items-center pt-6 border-t border-gray-100">
+                          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{n.date}</span>
+                          <button onClick={() => { if(confirm("Remove this bulletin?")) removeNotice(n.id) }} className="p-3 text-red-200 hover:text-red-600 transition-all"><Trash2 size={24} /></button>
+                       </div>
+                    </div>
+                  ))}
+               </div>
             </div>
           )}
         </div>
       </div>
       
-      {/* Dynamic Health Dashboard (Floating Overlay) */}
+      {/* Admin Panel Footer Status */}
       <div className="fixed bottom-8 right-8 z-50">
          <div className={`bg-white p-6 rounded-[2.5rem] shadow-2xl border-2 transition-all duration-700 flex flex-col space-y-4 ${dbConnected ? 'border-emerald-50' : 'border-red-100 translate-y-2'}`}>
             <div className="flex items-center space-x-4">
