@@ -36,7 +36,7 @@ interface HospitalContextType {
 
 const HospitalContext = createContext<HospitalContextType | undefined>(undefined);
 
-// Default mock data to ensure the website is NEVER blank
+// Initial Mock Data
 const DEFAULT_DEPTS: Department[] = [
   { id: '1', name: 'Cardiology', description: 'Advanced heart care and surgery.', icon: 'Heart' },
   { id: '2', name: 'Orthopedics', description: 'Bone, joint and muscle specialists.', icon: 'Activity' },
@@ -83,8 +83,8 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (rDocs.data && rDocs.data.length > 0) setDoctors(rDocs.data);
       if (rDepts.data && rDepts.data.length > 0) setDepartments(rDepts.data);
       if (rServs.data && rServs.data.length > 0) setServices(rServs.data);
-      if (rApts.data) setAppointments(rApts.data);
-      if (rNotes.data) setNotices(rNotes.data);
+      if (rApts.data && rApts.data.length > 0) setAppointments(rApts.data);
+      if (rNotes.data && rNotes.data.length > 0) setNotices(rNotes.data);
       
       if (rCfg.data && rCfg.data.length > 0) {
         setConfig(rCfg.data[0]);
@@ -103,67 +103,79 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     refreshData();
-    // Force end loading after 2 seconds to ensure the site is visible regardless of DB status
-    const timer = setTimeout(() => setLoading(false), 2000);
+    const timer = setTimeout(() => setLoading(false), 1500);
     return () => clearTimeout(timer);
   }, []);
 
+  // Write Operations with Optimistic Updates
   const addDoctor = async (doc: Omit<Doctor, 'id'>) => {
-    try { await supabase.from('doctors').insert([doc]); await refreshData(); } catch (e) { console.error(e); }
+    const tempId = Math.random().toString();
+    const newDoc = { ...doc, id: tempId };
+    setDoctors(prev => [...prev, newDoc]); // Optimistic update
+    try { await supabase.from('doctors').insert([doc]); } catch (e) { console.error(e); }
   };
 
   const updateDoctor = async (id: string, doc: Partial<Doctor>) => {
-    try { await supabase.from('doctors').update(doc).eq('id', id); await refreshData(); } catch (e) { console.error(e); }
+    setDoctors(prev => prev.map(d => d.id === id ? { ...d, ...doc } : d)); // Optimistic
+    try { await supabase.from('doctors').update(doc).eq('id', id); } catch (e) { console.error(e); }
   };
 
   const removeDoctor = async (id: string) => {
-    try { await supabase.from('doctors').delete().eq('id', id); await refreshData(); } catch (e) { console.error(e); }
+    setDoctors(prev => prev.filter(d => d.id !== id)); // Optimistic
+    try { await supabase.from('doctors').delete().eq('id', id); } catch (e) { console.error(e); }
   };
 
   const addDepartment = async (dept: Omit<Department, 'id'>) => {
-    try { await supabase.from('departments').insert([dept]); await refreshData(); } catch (e) { console.error(e); }
+    const tempId = Math.random().toString();
+    setDepartments(prev => [...prev, { ...dept, id: tempId }]); // Optimistic
+    try { await supabase.from('departments').insert([dept]); } catch (e) { console.error(e); }
   };
 
   const removeDepartment = async (id: string) => {
-    try { await supabase.from('departments').delete().eq('id', id); await refreshData(); } catch (e) { console.error(e); }
+    setDepartments(prev => prev.filter(d => d.id !== id)); // Optimistic
+    try { await supabase.from('departments').delete().eq('id', id); } catch (e) { console.error(e); }
   };
 
   const addService = async (service: Omit<Service, 'id'>) => {
-    try { await supabase.from('services').insert([service]); await refreshData(); } catch (e) { console.error(e); }
+    const tempId = Math.random().toString();
+    setServices(prev => [...prev, { ...service, id: tempId }]); // Optimistic
+    try { await supabase.from('services').insert([service]); } catch (e) { console.error(e); }
   };
 
   const removeService = async (id: string) => {
-    try { await supabase.from('services').delete().eq('id', id); await refreshData(); } catch (e) { console.error(e); }
+    setServices(prev => prev.filter(s => s.id !== id)); // Optimistic
+    try { await supabase.from('services').delete().eq('id', id); } catch (e) { console.error(e); }
   };
 
   const addNotice = async (notice: Omit<Notice, 'id'>) => {
-    try { await supabase.from('notices').insert([notice]); await refreshData(); } catch (e) { console.error(e); }
+    const tempId = Math.random().toString();
+    setNotices(prev => [{ ...notice, id: tempId }, ...prev]); // Optimistic
+    try { await supabase.from('notices').insert([notice]); } catch (e) { console.error(e); }
   };
 
   const removeNotice = async (id: string) => {
-    try { await supabase.from('notices').delete().eq('id', id); await refreshData(); } catch (e) { console.error(e); }
+    setNotices(prev => prev.filter(n => n.id !== id)); // Optimistic
+    try { await supabase.from('notices').delete().eq('id', id); } catch (e) { console.error(e); }
   };
 
   const bookAppointment = async (apt: Omit<Appointment, 'id' | 'status'>) => {
-    try {
-      const { error } = await supabase.from('appointments').insert([{ ...apt, status: 'Pending' }]);
-      if (error) throw error;
-      await refreshData();
-    } catch (e) { 
-      console.error('Booking failed, using local fallback:', e); 
-      setAppointments(prev => [{...apt, id: Math.random().toString(), status: 'Pending'}, ...prev]);
-    }
+    const tempId = Math.random().toString();
+    setAppointments(prev => [{ ...apt, id: tempId, status: 'Pending' }, ...prev]); // Optimistic
+    try { await supabase.from('appointments').insert([{ ...apt, status: 'Pending' }]); } catch (e) { console.error(e); }
   };
 
   const updateAppointment = async (id: string, apt: Partial<Appointment>) => {
-    try { await supabase.from('appointments').update(apt).eq('id', id); await refreshData(); } catch (e) { console.error(e); }
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, ...apt } : a)); // Optimistic
+    try { await supabase.from('appointments').update(apt).eq('id', id); } catch (e) { console.error(e); }
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
-    try { await supabase.from('appointments').update({ status }).eq('id', id); await refreshData(); } catch (e) { console.error(e); }
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a)); // Optimistic
+    try { await supabase.from('appointments').update({ status }).eq('id', id); } catch (e) { console.error(e); }
   };
 
   const updateConfig = async (newConfig: Partial<HospitalConfig>) => {
+    setConfig(prev => ({ ...prev, ...newConfig })); // Optimistic
     try {
       const { data: existing } = await supabase.from('hospital_config').select('id').limit(1);
       if (existing && existing.length > 0) {
@@ -171,11 +183,7 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       } else {
         await supabase.from('hospital_config').insert([newConfig]);
       }
-      await refreshData();
-    } catch (e) { 
-      setConfig(prev => ({ ...prev, ...newConfig }));
-      console.error(e); 
-    }
+    } catch (e) { console.error(e); }
   };
 
   return (

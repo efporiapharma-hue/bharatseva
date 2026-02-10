@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useHospital } from '../store/HospitalContext';
 import { 
   Settings, 
@@ -37,11 +37,19 @@ const Admin = () => {
   const [newDoc, setNewDoc] = useState({ 
     name: '', 
     qualification: '', 
-    departmentId: departments[0]?.id || '', 
+    departmentId: '', 
     photo: '', 
     availableDays: 'Mon, Wed, Fri', 
     timeSlots: '10 AM - 1 PM' 
   });
+
+  // Sync department ID once departments load
+  useEffect(() => {
+    if (departments.length > 0 && !newDoc.departmentId) {
+      setNewDoc(prev => ({ ...prev, departmentId: departments[0].id }));
+    }
+  }, [departments]);
+
   const [newNotice, setNewNotice] = useState({ title: '', content: '', isImportant: false });
   const [newDept, setNewDept] = useState({ name: '', description: '', icon: '' });
   const [newService, setNewService] = useState({ title: '', description: '' });
@@ -57,6 +65,7 @@ const Admin = () => {
       availableDays: newDoc.availableDays.split(',').map(d => d.trim()),
       timeSlots: newDoc.timeSlots.split(',').map(s => s.trim())
     });
+    // Reset form
     setNewDoc({ 
       name: '', 
       qualification: '', 
