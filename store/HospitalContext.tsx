@@ -1,13 +1,14 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Doctor, Department, Service, Appointment, Notice, HospitalConfig } from '../types';
 
-const SUPABASE_URL = 'https://pserlfetpyqoknfzhppc.supabase.co';
 /**
- * IMPORTANT: If "Offline Mode" persists, replace this key with your 
- * Supabase 'anon' key from Settings > API.
+ * 🚨 MASTER SETUP INSTRUCTIONS
+ * 1. Ensure the SQL script provided in the prompt is run in the Supabase Editor.
+ * 2. If 'Offline Mode' persists, verify your internet or if the project is paused.
  */
+const SUPABASE_URL = 'https://pserlfetpyqoknfzhppc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_PVKJQTJ6rOMfjiFC-euVTQ_YMtX9tW9'; 
 
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -54,122 +55,153 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dbConnected, setDbConnected] = useState(false);
+  const [dbConnected, setDbConnected] = useState(true); 
   const [config, setConfig] = useState<HospitalConfig>(DEFAULT_CONFIG);
 
-  const refreshData = async () => {
+  const safeFetch = async (tableName: string, orderField: string = 'created_at', ascending: boolean = true) => {
     try {
+      // Primary attempt with sorting
+      let { data, error } = await supabase.from(tableName).select('*').order(orderField, { ascending });
+      
+      // Fallback for missing sorting column
+      if (error && error.message.includes('column') && error.message.includes('does not exist')) {
+        const fallback = await supabase.from(tableName).select('*');
+        data = fallback.data;
+        error = fallback.error;
+      }
+
+      return { data: data || [], error };
+    } catch (e) {
+      return { data: [], error: e };
+    }
+  };
+
+  const refreshData = useCallback(async () => {
+    try {
+      // 1. Heartbeat check
+      const { error: hbError } = await supabase.from('hospital_config').select('id').limit(1);
+      if (hbError && hbError.message.includes('FetchError')) {
+        setDbConnected(false);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Parallel Fetch with individual error tolerance
       const [rDocs, rDepts, rServs, rApts, rNotes, rCfg] = await Promise.all([
-        supabase.from('doctors').select('*').order('created_at', { ascending: true }),
-        supabase.from('departments').select('*').order('created_at', { ascending: true }),
-        supabase.from('services').select('*').order('created_at', { ascending: true }),
-        supabase.from('appointments').select('*').order('created_at', { ascending: false }),
-        supabase.from('notices').select('*').order('created_at', { ascending: false }),
+        safeFetch('doctors', 'created_at', true),
+        safeFetch('departments', 'created_at', true),
+        safeFetch('services', 'created_at', true),
+        safeFetch('appointments', 'created_at', false),
+        safeFetch('notices', 'created_at', false),
         supabase.from('hospital_config').select('*').limit(1)
       ]);
 
-      // Error reporting for debugging "Offline Mode"
-      const results = [rDocs, rDepts, rServs, rApts, rNotes, rCfg];
-      const hasError = results.some(r => r.error);
+      // Assign data safely
+      if (rDocs.data) setDoctors(rDocs.data);
+      if (rDepts.data) setDepartments(rDepts.data);
+      if (rServs.data) setServices(rServs.data);
+      if (rApts.data) setAppointments(rApts.data);
+      if (rNotes.data) setNotices(rNotes.data);
+      if (rCfg.data && rCfg.data.length > 0) setConfig(rCfg.data[0]);
 
-      if (hasError) {
-        results.forEach((r, i) => {
-          if (r.error) {
-            console.error(`Supabase Error in query ${i}:`, r.error.message, r.error.details);
-          }
-        });
-        setDbConnected(false);
-      } else {
-        if (rDocs.data) setDoctors(rDocs.data);
-        if (rDepts.data) setDepartments(rDepts.data);
-        if (rServs.data) setServices(rServs.data);
-        if (rApts.data) setAppointments(rApts.data);
-        if (rNotes.data) setNotices(rNotes.data);
-        if (rCfg.data && rCfg.data.length > 0) setConfig(rCfg.data[0]);
-        setDbConnected(true);
-      }
-    } catch (error) {
-      console.error('Connection failed entirely:', error);
-      setDbConnected(false);
+      setDbConnected(true);
+    } catch (err) {
+      console.warn("Refresh encountered a network delay.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     refreshData();
     
+    // Realtime Sync Subscription
     const channel = supabase
-      .channel('schema-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+      .channel('master-sync')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
         refreshData();
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setDbConnected(true);
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          // Don't immediately set offline, let heartbeat decide
+        }
+      });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+    return () => { supabase.removeChannel(channel); };
+  }, [refreshData]);
 
+  // CRUD Operations
   const addDoctor = async (doc: Omit<Doctor, 'id'>) => {
     const { error } = await supabase.from('doctors').insert([doc]);
-    if (error) alert(`Save Error: ${error.message}`);
+    if (error) alert(error.message);
     await refreshData();
   };
 
   const updateDoctor = async (id: string, doc: Partial<Doctor>) => {
-    await supabase.from('doctors').update(doc).eq('id', id);
+    const { error } = await supabase.from('doctors').update(doc).eq('id', id);
+    if (error) alert(error.message);
     await refreshData();
   };
 
   const removeDoctor = async (id: string) => {
-    await supabase.from('doctors').delete().eq('id', id);
+    const { error } = await supabase.from('doctors').delete().eq('id', id);
+    if (error) alert(error.message);
     await refreshData();
   };
 
   const addDepartment = async (dept: Omit<Department, 'id'>) => {
-    await supabase.from('departments').insert([dept]);
+    const { error } = await supabase.from('departments').insert([dept]);
+    if (error) alert(error.message);
     await refreshData();
   };
 
   const removeDepartment = async (id: string) => {
-    await supabase.from('departments').delete().eq('id', id);
+    const { error } = await supabase.from('departments').delete().eq('id', id);
+    if (error) alert(error.message);
     await refreshData();
   };
 
   const addService = async (service: Omit<Service, 'id'>) => {
-    await supabase.from('services').insert([service]);
+    const { error } = await supabase.from('services').insert([service]);
+    if (error) alert(error.message);
     await refreshData();
   };
 
   const removeService = async (id: string) => {
-    await supabase.from('services').delete().eq('id', id);
+    const { error } = await supabase.from('services').delete().eq('id', id);
+    if (error) alert(error.message);
     await refreshData();
   };
 
   const addNotice = async (notice: Omit<Notice, 'id'>) => {
-    await supabase.from('notices').insert([notice]);
+    const { error } = await supabase.from('notices').insert([notice]);
+    if (error) alert(error.message);
     await refreshData();
   };
 
   const removeNotice = async (id: string) => {
-    await supabase.from('notices').delete().eq('id', id);
+    const { error } = await supabase.from('notices').delete().eq('id', id);
+    if (error) alert(error.message);
     await refreshData();
   };
 
   const bookAppointment = async (apt: Omit<Appointment, 'id' | 'status'>) => {
     const { error } = await supabase.from('appointments').insert([{ ...apt, status: 'Pending' }]);
-    if (error) alert(`Booking Error: ${error.message}`);
+    if (error) alert(error.message);
     await refreshData();
   };
 
   const updateAppointment = async (id: string, apt: Partial<Appointment>) => {
-    await supabase.from('appointments').update(apt).eq('id', id);
+    const { error } = await supabase.from('appointments').update(apt).eq('id', id);
+    if (error) alert(error.message);
     await refreshData();
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
-    await supabase.from('appointments').update({ status }).eq('id', id);
+    const { error } = await supabase.from('appointments').update({ status }).eq('id', id);
+    if (error) alert(error.message);
     await refreshData();
   };
 

@@ -18,7 +18,10 @@ import {
   Camera,
   Lock,
   LogIn,
-  AlertCircle
+  AlertCircle,
+  Phone,
+  Mail,
+  MapPin
 } from 'lucide-react';
 import { Appointment, Doctor } from '../types';
 
@@ -58,9 +61,6 @@ const Admin = () => {
   const [newNotice, setNewNotice] = useState({ title: '', content: '', isImportant: false });
   const [newDept, setNewDept] = useState({ name: '', description: '', icon: '' });
   const [newService, setNewService] = useState({ title: '', description: '' });
-
-  const [editingAptId, setEditingAptId] = useState<string | null>(null);
-  const [editAptData, setEditAptData] = useState<Partial<Appointment>>({});
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -266,6 +266,42 @@ const Admin = () => {
                            <img src={config.logo} alt="Logo Preview" className="w-full h-auto object-contain max-h-full" />
                         </div>
                     </div>
+                  </div>
+               </div>
+
+               <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
+                  <h3 className="text-xl font-black mb-8 flex items-center text-gray-800"><Phone className="mr-3 text-emerald-600" /> Operational Contacts</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <label className={labelClasses}>Emergency Phone</label>
+                      <input 
+                        type="tel" 
+                        value={config.phone} 
+                        onChange={(e) => updateConfig({ phone: e.target.value })}
+                        placeholder="+91 98765 43210"
+                        className={inputClasses}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClasses}>Official Email</label>
+                      <input 
+                        type="email" 
+                        value={config.email} 
+                        onChange={(e) => updateConfig({ email: e.target.value })}
+                        placeholder="contact@bharatsevahospital.in"
+                        className={inputClasses}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelClasses}>Main Physical Address</label>
+                    <textarea 
+                      value={config.address} 
+                      onChange={(e) => updateConfig({ address: e.target.value })}
+                      rows={3}
+                      placeholder="123, Health Avenue, New Delhi, India"
+                      className={`${inputClasses} resize-none`}
+                    ></textarea>
                   </div>
                </div>
             </div>
