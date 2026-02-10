@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Bharat Seva Hospital",
+  "description": "A comprehensive Indian hospital management system with PMJAY scheme integration, doctor scheduling, and a full admin dashboard.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
