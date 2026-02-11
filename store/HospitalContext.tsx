@@ -17,6 +17,7 @@ interface HospitalContextType {
   config: HospitalConfig;
   loading: boolean;
   dbConnected: boolean;
+  isDemoMode: boolean;
   lastError: string | null;
   addDoctor: (doc: Omit<Doctor, 'id'>) => Promise<boolean>;
   updateDoctor: (id: string, doc: Partial<Doctor>) => Promise<void>;
@@ -54,12 +55,28 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [dbConnected, setDbConnected] = useState(true);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [config, setConfig] = useState<HospitalConfig>(DEFAULT_CONFIG);
   
   const lastRefresh = useRef(0);
 
-  // Deep Key Search helper to find data even if column names differ
+  // Storage Keys for Offline Fallback
+  const STORAGE_KEYS = {
+    DOCTORS: 'bharat_doctors_v1',
+    DEPTS: 'bharat_depts_v1',
+    SERVICES: 'bharat_services_v1',
+    APPOINTMENTS: 'bharat_apts_v1',
+    NOTICES: 'bharat_notices_v1',
+    CONFIG: 'bharat_config_v1'
+  };
+
+  const saveToLocal = (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data));
+  const getFromLocal = (key: string) => {
+    const d = localStorage.getItem(key);
+    return d ? JSON.parse(d) : null;
+  };
+
   const findValue = (obj: any, keys: string[]) => {
     for (const key of keys) {
       if (obj[key] !== undefined && obj[key] !== null) return obj[key];
@@ -68,43 +85,25 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const mapDoctor = (d: any): Doctor => ({
-    id: d.id,
-    name: findValue(d, ['name', 'full_name', 'fullName', 'doctor_name', 'doctorName']) || 'Unnamed Doctor',
-    qualification: findValue(d, ['qualification', 'degree', 'qualifications', 'specialization']) || 'Specialist',
-    departmentId: findValue(d, ['departmentId', 'department_id', 'dept_id', 'deptId']) || '',
-    photo: findValue(d, ['photo', 'photo_url', 'photoUrl', 'image', 'image_url']) || DEFAULT_LOGO,
+    id: d.id || Math.random().toString(36).substr(2, 9),
+    name: findValue(d, ['name', 'full_name', 'fullName', 'doctor_name']) || 'Unnamed Doctor',
+    qualification: findValue(d, ['qualification', 'degree', 'specialization']) || 'Specialist',
+    departmentId: findValue(d, ['departmentId', 'department_id', 'dept_id']) || '',
+    photo: findValue(d, ['photo', 'photo_url', 'image']) || DEFAULT_LOGO,
     availableDays: d.availableDays || d.available_days || [],
     timeSlots: d.timeSlots || d.time_slots || []
   });
 
   const mapAppointment = (a: any): Appointment => ({
-    id: a.id,
-    patientName: findValue(a, ['patientName', 'patient_name', 'patientname', 'name']) || 'Unknown Patient',
-    patientPhone: findValue(a, ['patientPhone', 'patient_phone', 'patientphone', 'phone']) || 'N/A',
-    patientEmail: findValue(a, ['patientEmail', 'patient_email', 'patientemail', 'email']) || '',
-    doctorId: findValue(a, ['doctorId', 'doctor_id', 'doctorid']) || '',
-    date: findValue(a, ['date', 'consultation_date', 'booking_date']) || '',
-    timeSlot: findValue(a, ['timeSlot', 'timeslot', 'time_slot', 'slot']) || '',
+    id: a.id || Math.random().toString(36).substr(2, 9),
+    patientName: findValue(a, ['patientName', 'patient_name', 'name']) || 'Unknown Patient',
+    patientPhone: findValue(a, ['patientPhone', 'patient_phone', 'phone']) || 'N/A',
+    patientEmail: findValue(a, ['patientEmail', 'patient_email', 'email']) || '',
+    doctorId: findValue(a, ['doctorId', 'doctor_id']) || '',
+    date: findValue(a, ['date', 'consultation_date']) || '',
+    timeSlot: findValue(a, ['timeSlot', 'time_slot', 'slot']) || '',
     status: a.status || 'Pending'
   });
-
-  const mapNotice = (n: any): Notice => ({
-    id: n.id,
-    title: n.title || 'Bulletin',
-    content: n.content || '',
-    date: n.date || '',
-    isImportant: n.isImportant || n.is_important || false
-  });
-
-  const safeFetch = async (tableNames: string[]) => {
-    for (const tableName of tableNames) {
-      try {
-        const { data, error } = await supabase.from(tableName).select('*').limit(100);
-        if (!error && data) return data;
-      } catch (e) { continue; }
-    }
-    return null;
-  };
 
   const refreshData = useCallback(async (force = false) => {
     const now = Date.now();
@@ -112,37 +111,41 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     lastRefresh.current = now;
 
     try {
-      const [rDocs, rDepts, rServs, rApts, rNotes, rCfg] = await Promise.all([
-        safeFetch(['doctors', 'doctor', 'specialists']),
-        safeFetch(['departments', 'department', 'units']),
-        safeFetch(['services', 'service', 'facilities']),
-        safeFetch(['appointments', 'appointment', 'bookings']),
-        safeFetch(['notices', 'notice', 'bulletins']),
-        supabase.from('hospital_config').select('*').limit(1)
-      ]);
+      const { data: dDocs, error: eDocs } = await supabase.from('doctors').select('*');
+      const { data: dDepts, error: eDepts } = await supabase.from('departments').select('*');
+      const { data: dServs, error: eServs } = await supabase.from('services').select('*');
+      const { data: dApts, error: eApts } = await supabase.from('appointments').select('*');
+      const { data: dNotes, error: eNotes } = await supabase.from('notices').select('*');
+      const { data: dCfg, error: eCfg } = await supabase.from('hospital_config').select('*').limit(1);
 
-      if (rDocs) setDoctors(rDocs.map(mapDoctor));
-      if (rDepts) setDepartments(rDepts);
-      if (rServs) setServices(rServs);
-      if (rApts) setAppointments(rApts.map(mapAppointment));
-      if (rNotes) setNotices(rNotes.map(mapNotice));
-      if (rCfg.data?.[0]) {
-        const cfgData = rCfg.data[0];
-        setConfig({
-          name: findValue(cfgData, ['name', 'hospital_name']) || DEFAULT_CONFIG.name,
-          logo: findValue(cfgData, ['logo', 'logo_url']) || DEFAULT_LOGO,
-          address: findValue(cfgData, ['address', 'physical_address']) || DEFAULT_CONFIG.address,
-          phone: findValue(cfgData, ['phone', 'phone_number']) || DEFAULT_CONFIG.phone,
-          email: findValue(cfgData, ['email', 'official_email']) || DEFAULT_CONFIG.email
-        });
+      // If any core table fails with "not found", we trigger Demo Mode logic
+      if (eDocs?.code === 'PGRST116' || eDocs?.message.includes('not found')) {
+        setIsDemoMode(true);
+        setDoctors(getFromLocal(STORAGE_KEYS.DOCTORS) || []);
+        setDepartments(getFromLocal(STORAGE_KEYS.DEPTS) || []);
+        setServices(getFromLocal(STORAGE_KEYS.SERVICES) || []);
+        setAppointments(getFromLocal(STORAGE_KEYS.APPOINTMENTS) || []);
+        setNotices(getFromLocal(STORAGE_KEYS.NOTICES) || []);
+        const localCfg = getFromLocal(STORAGE_KEYS.CONFIG);
+        if (localCfg) setConfig(localCfg);
+        setLastError("Database Tables Missing. Running in Local Mode.");
+        setDbConnected(false);
+      } else {
+        if (dDocs) { setDoctors(dDocs.map(mapDoctor)); saveToLocal(STORAGE_KEYS.DOCTORS, dDocs.map(mapDoctor)); }
+        if (dDepts) { setDepartments(dDepts); saveToLocal(STORAGE_KEYS.DEPTS, dDepts); }
+        if (dServs) { setServices(dServs); saveToLocal(STORAGE_KEYS.SERVICES, dServs); }
+        if (dApts) { setAppointments(dApts.map(mapAppointment)); saveToLocal(STORAGE_KEYS.APPOINTMENTS, dApts.map(mapAppointment)); }
+        if (dNotes) { setNotices(dNotes); saveToLocal(STORAGE_KEYS.NOTICES, dNotes); }
+        if (dCfg?.[0]) { setConfig(dCfg[0]); saveToLocal(STORAGE_KEYS.CONFIG, dCfg[0]); }
+        
+        setDbConnected(true);
+        setIsDemoMode(false);
+        setLastError(null);
       }
-
-      setDbConnected(true);
-      setLastError(null);
     } catch (err: any) {
-      console.error("Critical Sync Failure:", err);
+      setIsDemoMode(true);
+      setLastError("Connection Issue. Using Offline Data.");
       setDbConnected(false);
-      setLastError(err.message || "Connection refused");
     } finally {
       setLoading(false);
     }
@@ -150,35 +153,26 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     refreshData(true);
-    const channel = supabase.channel('hospital-realtime-v8')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => refreshData(true))
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
   }, [refreshData]);
 
   const addDoctor = async (doc: Omit<Doctor, 'id'>) => {
-    const payload = {
-      name: doc.name,
-      full_name: doc.name,
-      qualification: doc.qualification,
-      degree: doc.qualification,
-      photo: doc.photo,
-      photo_url: doc.photo,
-      departmentId: doc.departmentId || null,
-      department_id: doc.departmentId || null,
-      availableDays: doc.availableDays,
-      available_days: doc.availableDays,
-      timeSlots: doc.timeSlots,
-      time_slots: doc.timeSlots
-    };
+    const payload = { ...doc, id: Math.random().toString(36).substr(2, 9) };
     
-    const { error } = await supabase.from('doctors').insert([payload]);
+    if (isDemoMode) {
+      const newList = [...doctors, payload];
+      setDoctors(newList);
+      saveToLocal(STORAGE_KEYS.DOCTORS, newList);
+      return true;
+    }
+
+    const { error } = await supabase.from('doctors').insert([doc]);
     if (error) {
-      const retry = await supabase.from('doctor').insert([payload]);
-      if (retry.error) {
-        setLastError(retry.error.message);
-        return false;
-      }
+      setLastError(error.message);
+      // Fallback to local if insert fails
+      const newList = [...doctors, payload];
+      setDoctors(newList);
+      saveToLocal(STORAGE_KEYS.DOCTORS, newList);
+      return true;
     }
     
     await refreshData(true);
@@ -186,110 +180,126 @@ export const HospitalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const removeDoctor = async (id: string) => {
-    await supabase.from('doctors').delete().eq('id', id);
-    await supabase.from('doctor').delete().eq('id', id);
-    await refreshData(true);
+    if (isDemoMode) {
+      const newList = doctors.filter(d => d.id !== id);
+      setDoctors(newList);
+      saveToLocal(STORAGE_KEYS.DOCTORS, newList);
+    } else {
+      await supabase.from('doctors').delete().eq('id', id);
+      await refreshData(true);
+    }
   };
 
   const addDepartment = async (dept: Omit<Department, 'id'>) => {
-    const { error } = await supabase.from('departments').insert([dept]);
-    if (error) await supabase.from('department').insert([dept]);
-    await refreshData(true);
+    if (isDemoMode) {
+      const newList = [...departments, { ...dept, id: Math.random().toString(36).substr(2, 9) }];
+      setDepartments(newList);
+      saveToLocal(STORAGE_KEYS.DEPTS, newList);
+    } else {
+      await supabase.from('departments').insert([dept]);
+      await refreshData(true);
+    }
     return true;
   };
 
   const removeDepartment = async (id: string) => {
-    await supabase.from('departments').delete().eq('id', id);
-    await supabase.from('department').delete().eq('id', id);
-    await refreshData(true);
+    if (isDemoMode) {
+      setDepartments(departments.filter(d => d.id !== id));
+    } else {
+      await supabase.from('departments').delete().eq('id', id);
+      await refreshData(true);
+    }
   };
 
   const addService = async (service: Omit<Service, 'id'>) => {
-    const { error } = await supabase.from('services').insert([service]);
-    if (error) await supabase.from('service').insert([service]);
-    await refreshData(true);
+    if (isDemoMode) {
+      setServices([...services, { ...service, id: Math.random().toString(36).substr(2, 9) }]);
+    } else {
+      await supabase.from('services').insert([service]);
+      await refreshData(true);
+    }
     return true;
   };
 
   const removeService = async (id: string) => {
-    await supabase.from('services').delete().eq('id', id);
-    await supabase.from('service').delete().eq('id', id);
-    await refreshData(true);
+    if (isDemoMode) {
+      setServices(services.filter(s => s.id !== id));
+    } else {
+      await supabase.from('services').delete().eq('id', id);
+      await refreshData(true);
+    }
   };
 
   const addNotice = async (notice: Omit<Notice, 'id'>) => {
-    const payload = {
-      title: notice.title,
-      content: notice.content,
-      date: notice.date,
-      isImportant: notice.isImportant,
-      is_important: notice.isImportant
-    };
-    const { error } = await supabase.from('notices').insert([payload]);
-    if (error) await supabase.from('notice').insert([payload]);
-    await refreshData(true);
+    if (isDemoMode) {
+      setNotices([...notices, { ...notice, id: Math.random().toString(36).substr(2, 9) }]);
+    } else {
+      await supabase.from('notices').insert([notice]);
+      await refreshData(true);
+    }
   };
 
   const removeNotice = async (id: string) => {
-    await supabase.from('notices').delete().eq('id', id);
-    await supabase.from('notice').delete().eq('id', id);
-    await refreshData(true);
+    if (isDemoMode) {
+      setNotices(notices.filter(n => n.id !== id));
+    } else {
+      await supabase.from('notices').delete().eq('id', id);
+      await refreshData(true);
+    }
   };
 
   const bookAppointment = async (apt: Omit<Appointment, 'id' | 'status'>) => {
-    const payload = {
-      patientName: apt.patientName,
-      patient_name: apt.patientName,
-      patientPhone: apt.patientPhone,
-      patient_phone: apt.patientPhone,
-      patientEmail: apt.patientEmail,
-      patient_email: apt.patientEmail,
-      doctorId: apt.doctorId || null,
-      doctor_id: apt.doctorId || null,
-      date: apt.date,
-      timeSlot: apt.timeSlot,
-      time_slot: apt.timeSlot,
-      status: 'Pending'
-    };
-
-    const { error } = await supabase.from('appointments').insert([payload]);
-    if (error) await supabase.from('appointment').insert([payload]);
-    await refreshData(true);
+    if (isDemoMode) {
+      setAppointments([...appointments, { ...apt, id: Math.random().toString(36).substr(2, 9), status: 'Pending' }]);
+    } else {
+      await supabase.from('appointments').insert([{ ...apt, status: 'Pending' }]);
+      await refreshData(true);
+    }
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
-    const { error } = await supabase.from('appointments').update({ status }).eq('id', id);
-    if (error) await supabase.from('appointment').update({ status }).eq('id', id);
-    await refreshData(true);
+    if (isDemoMode) {
+      setAppointments(appointments.map(a => a.id === id ? { ...a, status } : a));
+    } else {
+      await supabase.from('appointments').update({ status }).eq('id', id);
+      await refreshData(true);
+    }
   };
 
   const removeAppointment = async (id: string) => {
-    await supabase.from('appointments').delete().eq('id', id);
-    await supabase.from('appointment').delete().eq('id', id);
-    await refreshData(true);
+    if (isDemoMode) {
+      setAppointments(appointments.filter(a => a.id !== id));
+    } else {
+      await supabase.from('appointments').delete().eq('id', id);
+      await refreshData(true);
+    }
   };
 
   const updateDoctor = async (id: string, doc: Partial<Doctor>) => {
-    await supabase.from('doctors').update(doc).eq('id', id);
-    await supabase.from('doctor').update(doc).eq('id', id);
-    await refreshData(true);
+    if (isDemoMode) {
+      setDoctors(doctors.map(d => d.id === id ? { ...d, ...doc } : d));
+    } else {
+      await supabase.from('doctors').update(doc).eq('id', id);
+      await refreshData(true);
+    }
   };
 
   const updateConfig = async (cfg: Partial<HospitalConfig>) => { 
-    const { data } = await supabase.from('hospital_config').select('id').limit(1); 
-    const payload = {
-      ...cfg,
-      logo_url: cfg.logo, // Dual field support
-      hospital_name: cfg.name
-    };
-    if (data?.[0]) { await supabase.from('hospital_config').update(payload).eq('id', data[0].id); } 
-    else { await supabase.from('hospital_config').insert([payload]); } 
-    await refreshData(true); 
+    if (isDemoMode) {
+      const newCfg = { ...config, ...cfg };
+      setConfig(newCfg);
+      saveToLocal(STORAGE_KEYS.CONFIG, newCfg);
+    } else {
+      const { data } = await supabase.from('hospital_config').select('id').limit(1); 
+      if (data?.[0]) { await supabase.from('hospital_config').update(cfg).eq('id', data[0].id); } 
+      else { await supabase.from('hospital_config').insert([cfg]); } 
+      await refreshData(true); 
+    }
   };
 
   return (
     <HospitalContext.Provider value={{
-      doctors, departments, services, appointments, notices, config, loading, dbConnected, lastError,
+      doctors, departments, services, appointments, notices, config, loading, dbConnected, isDemoMode, lastError,
       addDoctor, updateDoctor, removeDoctor, addDepartment, removeDepartment, 
       addService, removeService, addNotice, removeNotice, 
       bookAppointment, updateAppointmentStatus, removeAppointment, updateConfig,
